@@ -65,13 +65,13 @@ const ok = (label, cond, extra) => { (cond ? pass++ : fail++); console.log((cond
   ok("folder scan found profiles", /12個のプロファイル/.test(await page.locator("#hit-summary").textContent()));
   await page.fill("#camera-query", "z5");
   await page.waitForTimeout(200);
-  let hits = await page.locator(".hit-cam").allTextContents();
+  let hits = await page.locator("#hits .hit-cam").allTextContents();
   ok("'z5' narrows to NikonZ5", hits.length === 3 && hits.every(h => h === "NikonZ5"), JSON.stringify(hits));
-  ok("the neutral profile is marked and listed first", (await page.locator(".hit .tag-good").count()) === 1 && /Neutral/.test(await page.locator(".hit").first().textContent()), await page.locator(".hit").first().textContent());
-  ok("styled profiles are marked unsuitable", (await page.locator(".hit .tag-bad").count()) === 2, (await page.locator(".hit .tag-bad").allTextContents()).join(","));
+  ok("the neutral profile is marked and listed first", (await page.locator("#hits .hit .tag-good").count()) === 1 && /Neutral/.test(await page.locator("#hits .hit").first().textContent()), await page.locator("#hits .hit").first().textContent());
+  ok("styled profiles are marked unsuitable", (await page.locator("#hits .hit .tag-bad").count()) === 2, (await page.locator("#hits .hit .tag-bad").allTextContents()).join(","));
   await page.fill("#camera-query", "ilce 7m4");
   await page.waitForTimeout(200);
-  hits = await page.locator(".hit-cam").allTextContents();
+  hits = await page.locator("#hits .hit-cam").allTextContents();
   ok("hyphenated model kept whole", hits.length === 1 && hits[0] === "SonyILCE-7M4", JSON.stringify(hits));
   await page.fill("#camera-query", "hasselblad");
   await page.waitForTimeout(200);
@@ -80,7 +80,7 @@ const ok = (label, cond, extra) => { (cond ? pass++ : fail++); console.log((cond
   /* --- pick, and the name follows automatically --- */
   await page.fill("#camera-query", "z5 neutral");
   await page.waitForTimeout(200);
-  await page.locator(".hit").first().click();
+  await page.locator("#hits .hit").first().click();
   await page.waitForSelector("#file-list:not([hidden])", { timeout: 10000 });
   const sum = await page.locator("#summary").textContent();
   ok("folder names on the page follow the camera", (await page.locator(".icc-dir").first().textContent()) === "ICC (Nikon Z5)", await page.locator(".icc-dir").first().textContent());
@@ -125,6 +125,8 @@ const ok = (label, cond, extra) => { (cond ? pass++ : fail++); console.log((cond
   await page.reload({ waitUntil: "load" });
   await page.waitForSelector("#file-list:not([hidden])", { timeout: 10000 });
   ok("profile restored after reload", (await page.locator("#file-list .dads-file-upload__file-name").allTextContents()).join() === "NikonZ5-Nikon_-_Neutral.icm");
+  ok("the baked camera is in my cameras", (await page.locator("#mycams").isVisible()) && JSON.stringify(await page.locator("#mycam-list .hit-cam").allTextContents()) === '["Nikon Z5"]', JSON.stringify(await page.locator("#mycam-list .hit-cam").allTextContents()));
+  ok("my camera shows as picked when it is", (await page.locator('#mycam-list .hit[aria-pressed="true"]').count()) === 1);
   ok("restore is explained", /前回選んだプロファイル/.test(await page.locator("#scan-status").textContent()));
   ok("ready to bake with no picking", await page.locator("#run-button").isEnabled());
   ok("folder list not shown on a restored visit", await page.locator("#search-box").isHidden());
@@ -134,24 +136,24 @@ const ok = (label, cond, extra) => { (cond ? pass++ : fail++); console.log((cond
   await page.waitForSelector("#search-box:not([hidden])", { timeout: 10000 });
   await page.fill("#camera-query", "z5 portrait");
   await page.waitForTimeout(200);
-  await page.locator(".hit").first().click();
+  await page.locator("#hits .hit").first().click();
   await page.waitForTimeout(400);
   let picked = await page.locator("#file-list .dads-file-upload__file-name").allTextContents();
   ok("a second profile of the same camera replaces the first", picked.length === 1 && picked[0] === "NikonZ5-Nikon_-_Portrait.icm", JSON.stringify(picked));
   await page.fill("#camera-query", "z5 neutral");
   await page.waitForTimeout(200);
-  await page.locator(".hit").first().click();
+  await page.locator("#hits .hit").first().click();
   await page.fill("#camera-query", "ilce 7m4");
   await page.waitForTimeout(200);
-  await page.locator(".hit").first().click();
+  await page.locator("#hits .hit").first().click();
   await page.fill("#camera-query", "eos r5");
   await page.waitForTimeout(200);
-  await page.locator(".hit").first().click();
+  await page.locator("#hits .hit").first().click();
   await page.waitForTimeout(400);
   picked = await page.locator("#file-list .dads-file-upload__file-name").allTextContents();
   ok("three cameras picked", picked.length === 3, JSON.stringify(picked));
-  ok("a picked hit shows as pressed", (await page.locator('.hit[aria-pressed="true"]').count()) === 1);
-  await page.locator(".hit").first().click();   /* EOS R5 again: unpick */
+  ok("a picked hit shows as pressed", (await page.locator('#hits .hit[aria-pressed="true"]').count()) === 1);
+  await page.locator("#hits .hit").first().click();   /* EOS R5 again: unpick */
   await page.waitForTimeout(400);
   picked = await page.locator("#file-list .dads-file-upload__file-name").allTextContents();
   ok("clicking a picked hit unpicks it", picked.length === 2 && !picked.some(n => /EOSR5/.test(n)), JSON.stringify(picked));
@@ -191,6 +193,24 @@ const ok = (label, cond, extra) => { (cond ? pass++ : fail++); console.log((cond
   await page.waitForTimeout(800);
   ok("解除 clears the remembered profile", await page.locator("#file-list").isHidden());
   ok("run button disabled again", await page.locator("#run-button").isDisabled());
+
+  /* --- my cameras survive the picks being cleared --- */
+  ok("both baked cameras are in my cameras", JSON.stringify(await page.locator("#mycam-list .hit-cam").allTextContents()) === '["Nikon Z5","Sony ILCE-7M4"]', JSON.stringify(await page.locator("#mycam-list .hit-cam").allTextContents()));
+  ok("my camera keeps the latest profile of that camera", /NikonZ5-Nikon_-_Neutral\.icm/.test(await page.locator("#mycam-list .hit-rest").first().textContent()), await page.locator("#mycam-list .hit-rest").first().textContent());
+  await page.locator("#mycam-all").click();
+  await page.waitForTimeout(500);
+  ok("すべて選ぶ picks every my camera", (await page.locator("#file-list .dads-file-upload__file-name").count()) === 2 && (await page.locator("#run-button").isEnabled()));
+  await page.locator("#mycam-list .hit").first().click();
+  await page.waitForTimeout(400);
+  ok("clicking a picked my camera unpicks it", (await page.locator("#file-list .dads-file-upload__file-name").count()) === 1);
+  await page.locator("#mycam-list [data-mydel]").last().click();
+  await page.waitForTimeout(400);
+  await page.reload({ waitUntil: "load" });
+  await page.waitForTimeout(800);
+  ok("deleting a my camera is remembered", JSON.stringify(await page.locator("#mycam-list .hit-cam").allTextContents()) === '["Nikon Z5"]', JSON.stringify(await page.locator("#mycam-list .hit-cam").allTextContents()));
+  await page.locator("#mycam-list [data-mydel]").first().click();
+  await page.waitForTimeout(300);
+  ok("no my cameras, no block", await page.locator("#mycams").isHidden());
 
   ok("no page errors", errs.length === 0, errs.join(" | "));
   console.log(`\n${pass} passed, ${fail} failed`);

@@ -50,6 +50,9 @@ body[data-os="mac"] [data-os="win"], body[data-os="win"] [data-os="mac"] { displ
 .hit:focus-visible { outline: calc(3 / 16 * 1rem) solid var(--color-neutral-black); outline-offset: calc(-3 / 16 * 1rem); }
 .hit[aria-pressed="true"] { background: var(--color-primitive-blue-50, #e8f1fe); box-shadow: inset calc(4 / 16 * 1rem) 0 0 var(--color-primitive-blue-900); }
 .hit-cam { font-weight: 700; overflow-wrap: anywhere; }
+.mycam-row { display: flex; align-items: stretch; }
+.mycam-row .hit { flex: 1; }
+.mycam-del { flex-shrink: 0; align-self: center; margin-right: calc(12 / 16 * 1rem); }
 .tag { display: inline-block; margin-left: calc(8 / 16 * 1rem); padding: 0 calc(8 / 16 * 1rem); border-radius: calc(4 / 16 * 1rem); font-size: calc(12 / 16 * 1rem); font-weight: 400; vertical-align: calc(1 / 16 * 1rem); }
 .tag-good { background: var(--color-primitive-green-100, #d7f0dc); color: var(--color-semantic-success-2, #19603a); }
 .tag-bad { background: var(--color-neutral-solid-gray-100, #ebebeb); color: var(--color-neutral-solid-gray-600); }
@@ -98,7 +101,14 @@ ul.plain > li + li { margin-top: calc(6 / 16 * 1rem); }
       <h2 class="dads-heading__heading" id="h-step1"><span class="step-no" aria-hidden="true">1</span>元にするプロファイルを選ぶ</h2>
     </div>
     <div class="stack-16">
-      <p>Capture One が持っているカメラプロファイルのフォルダを選ぶと、カメラ名で探せます。</p>
+      <div id="mycams" class="stack-16 mycams" hidden>
+        <div class="dads-heading" data-size="18"><h3 class="dads-heading__heading">マイカメラ</h3></div>
+        <p class="note">前に作ったカメラです。押すと選択、もう一度押すと解除です。このブラウザの中にだけ保存しています。</p>
+        <ul class="hits" id="mycam-list"></ul>
+        <p><button class="dads-button" data-type="outline" data-size="sm" type="button" id="mycam-all">すべて選ぶ</button></p>
+      </div>
+
+      <p id="lead-folder">Capture One が持っているカメラプロファイルのフォルダを選ぶと、カメラ名で探せます。</p>
 
       <details class="where">
         <summary>フォルダの場所</summary>

@@ -122,6 +122,7 @@
     refresh();
   }
   function renderPicks() {
+    if (mycams.length) setTimeout(renderMyCams, 0);
     $("file-list").innerHTML = state.picks.map(function (p, i) {
       return '<li class="dads-file-upload__file-item"><div class="dads-file-upload__file-marker"></div>' +
         '<div class="dads-file-upload__file-info"><p><span class="dads-file-upload__file-name">' + esc(p.file.name) + "</span>" +
@@ -301,7 +302,49 @@
     });
   }
   /* every picked profile, under KEY_ALL; the one-profile record of earlier versions is still read */
-  var KEY_ALL = "picks";
+  var KEY_ALL = "picks", KEY_MY = "mycams";
+  /* my cameras: every camera a ZIP was saved for, newest profile per camera, kept until deleted here */
+  var mycams = [];
+  function saveMyCams() {
+    try { var recs = mycams.map(function (m) { return { name: m.name, buf: m.buf, at: m.at }; });
+      idbRun("readwrite", function (st) { st.put(recs, KEY_MY); })["catch"](function () {}); } catch (e) {}
+  }
+  function loadMyCams() {
+    try {
+      idbRun("readonly", function (st) { return st.get(KEY_MY); }).then(function (recs) {
+        mycams = (recs || []).filter(function (r) { return r && r.buf && r.name; });
+        renderMyCams();
+      }, function () {});
+    } catch (e) {}
+  }
+  function myCamOf(name) { return camName({ file: { name: name } }); }
+  function addMyCams(picks) {
+    var at = new Date().toISOString().slice(0, 10);
+    picks.forEach(function (p) {
+      var cam = camName(p), i = mycams.findIndex(function (m) { return myCamOf(m.name) === cam; }), rec = { name: p.file.name, buf: p.buf, at: at };
+      if (i >= 0) mycams[i] = rec; else mycams.push(rec);
+    });
+    mycams.sort(function (a, b) { return myCamOf(a.name).localeCompare(myCamOf(b.name), "en"); });
+    saveMyCams(); renderMyCams();
+  }
+  function renderMyCams() {
+    $("mycams").hidden = !mycams.length;
+    $("mycam-list").innerHTML = mycams.map(function (m, i) {
+      var cam = myCamOf(m.name), on = state.picks.some(function (p) { return camName(p) === cam && p.file.name === m.name; });
+      var disp = camDisplay({ file: { name: m.name } });
+      return '<li class="mycam-row"><button type="button" class="hit" data-my="' + i + '" aria-pressed="' + on + '">' +
+        '<span class="hit-cam">' + esc(disp) + "</span>" +
+        '<span class="hit-rest">' + esc(m.name + (m.at ? "　前回 " + m.at : "")) + "</span></button>" +
+        '<button type="button" class="dads-button mycam-del" data-type="text" data-size="xs" data-mydel="' + i + '" aria-label="' + esc(disp) + ' をマイカメラから削除">削除</button></li>';
+    }).join("");
+    $("lead-folder").textContent = mycams.length ? "ほかのカメラは、Capture One が持っているカメラプロファイルのフォルダを選ぶと、カメラ名で探せます。" : "Capture One が持っているカメラプロファイルのフォルダを選ぶと、カメラ名で探せます。";
+  }
+  function pickMyCam(i, only) {
+    var m = mycams[i], cam = myCamOf(m.name), k = state.picks.findIndex(function (p) { return camName(p) === cam && p.file.name === m.name; });
+    if (k >= 0) { if (!only) { dropPick(k); $("upload-announcer").textContent = m.name + " を解除しました。"; } return; }
+    var f; try { f = new File([m.buf], m.name, { type: "application/vnd.iccprofile" }); } catch (e) { return; }
+    takeFile(f, false, null);
+  }
   function remember() {
     try {
       var recs = state.picks.map(function (p) { return { name: p.file.name, buf: p.buf }; });
@@ -393,6 +436,17 @@
   $("dir-button").addEventListener("click", function () { $("dir-input").click(); });
   $("dir-input").addEventListener("change", function () { if (this.files && this.files.length) { beginScan(); takeFileList(this.files); } });
   $("file-input").addEventListener("change", function () { if (this.files && this.files.length) takeFileList(this.files); });
+  $("mycam-list").addEventListener("click", function (e) {
+    var d = e.target.closest && e.target.closest("[data-mydel]");
+    if (d) {
+      var m = mycams[+d.getAttribute("data-mydel")];
+      mycams.splice(+d.getAttribute("data-mydel"), 1); saveMyCams(); renderMyCams();
+      $("upload-announcer").textContent = myCamOf(m.name) + " をマイカメラから削除しました。";
+      return;
+    }
+    var b = e.target.closest && e.target.closest("[data-my]"); if (b) pickMyCam(+b.getAttribute("data-my"), false);
+  });
+  $("mycam-all").addEventListener("click", function () { mycams.forEach(function (m, i) { pickMyCam(i, true); }); });
   $("file-list").addEventListener("click", function (e) {
     var b = e.target.closest && e.target.closest("[data-remove]"); if (!b) return;
     var name = state.picks[+b.getAttribute("data-remove")].file.name;
@@ -482,6 +536,7 @@
       $("status").textContent = "ダウンロードの確認画面を開いています…";
       saveFile(zname, zipped).then(function () {
         $("status").textContent = "";
+        addMyCams(picks);
         $("done-title").textContent = (picks.length > 1 ? picks.length + "台のカメラで" : "") + js.length + "種類のフィルムを作成しました";
         $("done-body").textContent = zname + " を保存しました。ICCプロファイル" + total + "個とスタイル" + total + "個が入っています。下の「Capture One での使い方」の手順で読み込んでください。";
         $("done-banner").hidden = false; $("done-banner").focus();
@@ -494,5 +549,6 @@
     step();
   });
 
+  loadMyCams();
   syncOs(); buildPaths(); drawAllPreviews(); restore(); refresh();
 })();
