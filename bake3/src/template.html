@@ -48,7 +48,7 @@ body[data-os="mac"] [data-os="win"], body[data-os="win"] [data-os="mac"] { displ
 .hit { display: block; width: 100%; box-sizing: border-box; text-align: left; border: 0; background: none; font: inherit; color: inherit; padding: calc(10 / 16 * 1rem) calc(16 / 16 * 1rem); cursor: pointer; line-height: 1.5; }
 .hit:hover { background: var(--color-neutral-solid-gray-50); }
 .hit:focus-visible { outline: calc(3 / 16 * 1rem) solid var(--color-neutral-black); outline-offset: calc(-3 / 16 * 1rem); }
-.hit[aria-current="true"] { background: var(--color-primitive-blue-50, #e8f1fe); box-shadow: inset calc(4 / 16 * 1rem) 0 0 var(--color-primitive-blue-900); }
+.hit[aria-pressed="true"] { background: var(--color-primitive-blue-50, #e8f1fe); box-shadow: inset calc(4 / 16 * 1rem) 0 0 var(--color-primitive-blue-900); }
 .hit-cam { font-weight: 700; overflow-wrap: anywhere; }
 .tag { display: inline-block; margin-left: calc(8 / 16 * 1rem); padding: 0 calc(8 / 16 * 1rem); border-radius: calc(4 / 16 * 1rem); font-size: calc(12 / 16 * 1rem); font-weight: 400; vertical-align: calc(1 / 16 * 1rem); }
 .tag-good { background: var(--color-primitive-green-100, #d7f0dc); color: var(--color-semantic-success-2, #19603a); }
@@ -180,18 +180,7 @@ ul.plain > li + li { margin-top: calc(6 / 16 * 1rem); }
             <ul class="dads-file-upload__error-messages" id="upload-errors"></ul>
           </div>
           <p class="dads-file-upload__empty-message" id="empty-message">まだ何も選ばれていません</p>
-          <ul class="dads-file-upload__file-list" id="file-list" hidden>
-            <li class="dads-file-upload__file-item">
-              <div class="dads-file-upload__file-marker"></div>
-              <div class="dads-file-upload__file-info">
-                <p>
-                  <span class="dads-file-upload__file-name" id="file-name"></span>
-                  <span class="dads-file-upload__file-meta" id="file-meta"></span>
-                </p>
-              </div>
-              <button class="dads-file-upload__remove-button dads-button" data-type="text" data-size="xs" type="button" id="remove-button">解除</button>
-            </li>
-          </ul>
+          <ul class="dads-file-upload__file-list" id="file-list" hidden></ul>
         </div>
       </div>
 
@@ -200,7 +189,7 @@ ul.plain > li + li { margin-top: calc(6 / 16 * 1rem); }
       <div id="search-box" class="stack-16" hidden>
         <div class="dads-form-control-label" data-size="md">
           <label class="dads-form-control-label__label" for="camera-query">カメラ名で検索</label>
-          <p id="query-support" class="dads-form-control-label__support-text">例：Z5、EOS R5、X-T4。スペースで区切ると、すべての語を含むものだけが残ります。<br>Neutral や Standard のように、絵作りの入っていないものが編集しやすいためおすすめです。Portrait や Vivid のような演出済みのプロファイルを元にすると、その演出の上にフィルムの色が重なります。</p>
+          <p id="query-support" class="dads-form-control-label__support-text">例：Z5、EOS R5、X-T4。スペースで区切ると、すべての語を含むものだけが残ります。<br>押すと選択、もう一度押すと解除です。別のカメラも続けて選ぶと、まとめて1つのZIPで作れます（8台まで。同じカメラは1つだけ）。<br>Neutral や Standard のように、絵作りの入っていないものが編集しやすいためおすすめです。Portrait や Vivid のような演出済みのプロファイルを元にすると、その演出の上にフィルムの色が重なります。</p>
           <div class="dads-form-control-label__field">
             <span class="dads-input-text">
               <input id="camera-query" class="dads-input-text__input" type="search" data-size="md" aria-describedby="query-support" autocomplete="off" spellcheck="false">
@@ -223,7 +212,7 @@ ul.plain > li + li { margin-top: calc(6 / 16 * 1rem); }
 
       <div class="dest-block">
         <p>置き場所</p>
-        <span class="note">ZIPを展開してできる2つのフォルダを、それぞれ次の場所に移します。</span>
+        <span class="note">ZIPを展開してできる2つのフォルダを、それぞれ次の場所に移します。複数のカメラを選んだときは、カメラごとに同じ2つが並んでいます。</span>
         <p class="dest-sub"><code class="icc-dir">ICC (カメラ名)</code> の中身（ICCプロファイル）</p>
         <span class="path-row" data-os="mac">
           <code class="path" id="dest-mac">/Library/ColorSync/Profiles</code>

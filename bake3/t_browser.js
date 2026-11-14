@@ -122,13 +122,67 @@ const ok = (label, cond, extra) => { (cond ? pass++ : fail++); console.log((cond
   /* --- the profile is remembered across visits --- */
   await page.reload({ waitUntil: "load" });
   await page.waitForSelector("#file-list:not([hidden])", { timeout: 10000 });
-  ok("profile restored after reload", (await page.locator("#file-name").textContent()) === "NikonZ5-Nikon_-_Neutral.icm");
+  ok("profile restored after reload", (await page.locator("#file-list .dads-file-upload__file-name").allTextContents()).join() === "NikonZ5-Nikon_-_Neutral.icm");
   ok("restore is explained", /前回選んだプロファイル/.test(await page.locator("#scan-status").textContent()));
   ok("ready to bake with no picking", await page.locator("#run-button").isEnabled());
   ok("folder list not shown on a restored visit", await page.locator("#search-box").isHidden());
 
+  /* --- several cameras in one ZIP --- */
+  await page.setInputFiles("#dir-input", T + "/Input");
+  await page.waitForSelector("#search-box:not([hidden])", { timeout: 10000 });
+  await page.fill("#camera-query", "z5 portrait");
+  await page.waitForTimeout(200);
+  await page.locator(".hit").first().click();
+  await page.waitForTimeout(400);
+  let picked = await page.locator("#file-list .dads-file-upload__file-name").allTextContents();
+  ok("a second profile of the same camera replaces the first", picked.length === 1 && picked[0] === "NikonZ5-Nikon_-_Portrait.icm", JSON.stringify(picked));
+  await page.fill("#camera-query", "z5 neutral");
+  await page.waitForTimeout(200);
+  await page.locator(".hit").first().click();
+  await page.fill("#camera-query", "ilce 7m4");
+  await page.waitForTimeout(200);
+  await page.locator(".hit").first().click();
+  await page.fill("#camera-query", "eos r5");
+  await page.waitForTimeout(200);
+  await page.locator(".hit").first().click();
+  await page.waitForTimeout(400);
+  picked = await page.locator("#file-list .dads-file-upload__file-name").allTextContents();
+  ok("three cameras picked", picked.length === 3, JSON.stringify(picked));
+  ok("a picked hit shows as pressed", (await page.locator('.hit[aria-pressed="true"]').count()) === 1);
+  await page.locator(".hit").first().click();   /* EOS R5 again: unpick */
+  await page.waitForTimeout(400);
+  picked = await page.locator("#file-list .dads-file-upload__file-name").allTextContents();
+  ok("clicking a picked hit unpicks it", picked.length === 2 && !picked.some(n => /EOSR5/.test(n)), JSON.stringify(picked));
+  ok("summary names both cameras", /2台のカメラ（Nikon Z5、Sony ILCE-7M4）/.test(await page.locator("#summary").textContent()), await page.locator("#summary").textContent());
+  ok("run button says how many", (await page.locator("#run-button").textContent()).trim() === "2台分のICCプロファイルを作成してダウンロード");
+  {
+    const dl2 = page.waitForEvent("download", { timeout: 180000 });
+    await page.locator("#run-button").click();
+    const d2 = await dl2; await d2.saveAs(T + "/out2.zip");
+    ok("multi-camera zip name", d2.suggestedFilename() === "film-profiles-2-cameras.zip", d2.suggestedFilename());
+    const { execSync } = require("child_process");
+    execSync(`rm -rf "${T}/unz2" && mkdir -p "${T}/unz2" && cd "${T}/unz2" && unzip -q ../out2.zip`);
+    const top = fs.readdirSync(T + "/unz2/film-profiles").sort();
+    ok("one folder pair per camera", JSON.stringify(top) === JSON.stringify(["1 Film (Nikon Z5)", "1 Film (Sony ILCE-7M4)", "ICC (Nikon Z5)", "ICC (Sony ILCE-7M4)"]), JSON.stringify(top));
+    const counts = top.map(d => fs.readdirSync(T + "/unz2/film-profiles/" + d).length);
+    ok("75 files in each", counts.every(c => c === 75), JSON.stringify(counts));
+    const sony = fs.readFileSync(T + "/unz2/film-profiles/1 Film (Sony ILCE-7M4)/Film KP400 (Sony ILCE-7M4).costyle", "utf8");
+    ok("each camera's styles point at its own ICC and curve", sony.includes('V="SonyILCE-7M4-Film KP400 base.icm"') && sony.includes('V="SonyILCE-7M4-Linear Response.fcrv"'));
+    const a = fs.readFileSync(T + "/unz2/film-profiles/ICC (Nikon Z5)/NikonZ5-Film KP400 base.icm"), b = fs.readFileSync(T + "/unz2/film-profiles/ICC (Sony ILCE-7M4)/SonyILCE-7M4-Film KP400 base.icm");
+    ok("each camera's ICC carries its own name", a.includes(Buffer.from("NikonZ5-Film KP400 base")) && b.includes(Buffer.from("SonyILCE-7M4-Film KP400 base")));
+    await page.waitForSelector("#done-banner:not([hidden])", { timeout: 10000 });
+    ok("done banner counts every profile", /ICCプロファイル150個/.test(await page.locator("#done-body").textContent()), await page.locator("#done-body").textContent());
+  }
+  await page.reload({ waitUntil: "load" });
+  await page.waitForSelector("#file-list:not([hidden])", { timeout: 10000 });
+  await page.waitForTimeout(500);
+  ok("both cameras restored after reload", (await page.locator("#file-list .dads-file-upload__file-name").count()) === 2);
+
   /* --- 解除 forgets it --- */
-  await page.locator("#remove-button").click();
+  await page.locator("#file-list [data-remove]").first().click();
+  await page.waitForTimeout(300);
+  ok("解除 removes one camera", (await page.locator("#file-list .dads-file-upload__file-name").count()) === 1);
+  await page.locator("#file-list [data-remove]").first().click();
   await page.waitForTimeout(400);
   await page.reload({ waitUntil: "load" });
   await page.waitForTimeout(800);
