@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>フィルムプロファイル焼き込みツール</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&family=Noto+Sans+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+/*__CSS__*/
+</style>
+<style>
+body { margin: 0; color: var(--color-neutral-solid-gray-800); background: var(--color-neutral-white); line-height: 1.7; font-size: calc(16 / 16 * 1rem); }
+.page { max-width: calc(760 / 16 * 1rem); margin: 0 auto; padding: calc(40 / 16 * 1rem) calc(16 / 16 * 1rem) calc(80 / 16 * 1rem); }
+@media (min-width: 48em) { .page { padding-inline: calc(32 / 16 * 1rem); } }
+.page p { margin: 0; }
+.lead { margin-top: calc(16 / 16 * 1rem) !important; }
+.stack-24 > * + * { margin-top: calc(24 / 16 * 1rem); }
+.stack-16 > * + * { margin-top: calc(16 / 16 * 1rem); }
+.stack-8 > * + * { margin-top: calc(8 / 16 * 1rem); }
+.section { margin-top: calc(56 / 16 * 1rem); }
+.section > .dads-heading + * { margin-top: calc(16 / 16 * 1rem); }
+.step-no { display: inline-flex; align-items: center; justify-content: center; width: calc(32 / 16 * 1rem); height: calc(32 / 16 * 1rem); margin-right: calc(12 / 16 * 1rem); border-radius: var(--border-radius-full, 9999px); background: var(--color-primitive-blue-900); color: var(--color-neutral-white); font-size: calc(17 / 16 * 1rem); vertical-align: middle; }
+.note { color: var(--color-neutral-solid-gray-600); font-size: calc(16 / 16 * 1rem); }
+.path { display: block; margin-top: calc(8 / 16 * 1rem); padding: calc(8 / 16 * 1rem) calc(12 / 16 * 1rem); border-radius: calc(8 / 16 * 1rem); background: var(--color-neutral-solid-gray-50); font-family: var(--font-family-mono); font-size: calc(14 / 16 * 1rem); line-height: 1.5; overflow-wrap: anywhere; }
+.where { border: 1px solid var(--color-neutral-solid-gray-420); border-radius: calc(8 / 16 * 1rem); }
+.where > summary { padding: calc(12 / 16 * 1rem) calc(16 / 16 * 1rem); cursor: pointer; font-weight: 700; }
+.where > summary:focus-visible { outline: calc(3 / 16 * 1rem) solid var(--color-neutral-black); outline-offset: calc(-3 / 16 * 1rem); border-radius: calc(8 / 16 * 1rem); }
+.where-body { padding: 0 calc(16 / 16 * 1rem) calc(16 / 16 * 1rem); }
+.where-body code { font-family: var(--font-family-mono); font-size: calc(14 / 16 * 1rem); background: var(--color-neutral-solid-gray-50); padding: 0 .3em; border-radius: calc(4 / 16 * 1rem); }
+.where-body .note { display: block; margin-top: calc(8 / 16 * 1rem); font-size: calc(14 / 16 * 1rem); }
+kbd { font-family: var(--font-family-mono); font-size: calc(13 / 16 * 1rem); border: 1px solid var(--color-neutral-solid-gray-420); border-bottom-width: 2px; border-radius: calc(4 / 16 * 1rem); padding: 0 .4em; white-space: nowrap; }
+.path-row { display: flex; align-items: flex-start; gap: calc(8 / 16 * 1rem); margin-top: calc(8 / 16 * 1rem); }
+.path-row .path { flex: 1; margin-top: 0; }
+.path-row .dads-button { flex-shrink: 0; }
+.path-build { display: flex; flex-wrap: wrap; gap: calc(16 / 16 * 1rem); margin-top: calc(12 / 16 * 1rem); }
+.path-build .dads-form-control-label__label { font-size: calc(14 / 16 * 1rem); }
+.dest-block { border: 1px solid var(--color-neutral-solid-gray-420); border-radius: calc(8 / 16 * 1rem); padding: calc(12 / 16 * 1rem) calc(16 / 16 * 1rem); }
+.dest-block > p:first-child { font-weight: 700; }
+.dest-sub { margin-top: calc(12 / 16 * 1rem) !important; font-size: calc(14 / 16 * 1rem); font-weight: 700; }
+.dest-block .note { display: block; margin-top: calc(8 / 16 * 1rem); font-size: calc(14 / 16 * 1rem); }
+.dest-block .path-row { margin-top: calc(8 / 16 * 1rem); }
+body[data-os="mac"] [data-os="win"], body[data-os="win"] [data-os="mac"] { display: none; }
+.hits { list-style: none; margin: 0; padding: 0; border: 1px solid var(--color-neutral-solid-gray-420); border-radius: calc(8 / 16 * 1rem); max-height: calc(360 / 16 * 1rem); overflow-y: auto; }
+.hits:empty { display: none; }
+.hits > li + li { border-top: 1px solid var(--color-neutral-solid-gray-200, #e8e8e8); }
+.hit { display: block; width: 100%; box-sizing: border-box; text-align: left; border: 0; background: none; font: inherit; color: inherit; padding: calc(10 / 16 * 1rem) calc(16 / 16 * 1rem); cursor: pointer; line-height: 1.5; }
+.hit:hover { background: var(--color-neutral-solid-gray-50); }
+.hit:focus-visible { outline: calc(3 / 16 * 1rem) solid var(--color-neutral-black); outline-offset: calc(-3 / 16 * 1rem); }
+.hit[aria-current="true"] { background: var(--color-primitive-blue-50, #e8f1fe); box-shadow: inset calc(4 / 16 * 1rem) 0 0 var(--color-primitive-blue-900); }
+.hit-cam { font-weight: 700; overflow-wrap: anywhere; }
+.tag { display: inline-block; margin-left: calc(8 / 16 * 1rem); padding: 0 calc(8 / 16 * 1rem); border-radius: calc(4 / 16 * 1rem); font-size: calc(12 / 16 * 1rem); font-weight: 400; vertical-align: calc(1 / 16 * 1rem); }
+.tag-good { background: var(--color-primitive-green-100, #d7f0dc); color: var(--color-semantic-success-2, #19603a); }
+.tag-bad { background: var(--color-neutral-solid-gray-100, #ebebeb); color: var(--color-neutral-solid-gray-600); }
+.hit-rest { display: block; color: var(--color-neutral-solid-gray-600); font-size: calc(14 / 16 * 1rem); overflow-wrap: anywhere; }
+.profile-facts { display: grid; grid-template-columns: max-content 1fr; gap: calc(4 / 16 * 1rem) calc(16 / 16 * 1rem); margin: calc(16 / 16 * 1rem) 0 0; font-size: calc(16 / 16 * 1rem); }
+.profile-facts dt { color: var(--color-neutral-solid-gray-600); }
+.profile-facts dd { margin: 0; overflow-wrap: anywhere; }
+.previews { display: grid; gap: calc(20 / 16 * 1rem); }
+.preview-item figcaption { font-size: calc(16 / 16 * 1rem); font-weight: 700; margin-bottom: calc(6 / 16 * 1rem); }
+.preview-item figcaption span { font-weight: 400; color: var(--color-neutral-solid-gray-600); margin-left: calc(8 / 16 * 1rem); }
+.preview-item { margin: 0; }
+.preview-item canvas { display: block; width: 100%; height: auto; border-radius: calc(8 / 16 * 1rem); }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: calc(16 / 16 * 1rem); }
+.status { min-height: 1.7em; }
+.progress { width: 100%; height: calc(8 / 16 * 1rem); border-radius: calc(4 / 16 * 1rem); background: var(--color-neutral-solid-gray-100); overflow: hidden; }
+.progress > span { display: block; height: 100%; width: 0; background: var(--color-primitive-blue-900); transition: width .1s linear; }
+@media (prefers-reduced-motion: reduce) { .progress > span { transition: none; } }
+ol.steps { margin: 0; padding-left: 1.5em; }
+ol.steps > li + li { margin-top: calc(8 / 16 * 1rem); }
+ul.plain { margin: 0; padding-left: 1.25em; }
+ul.plain > li + li { margin-top: calc(6 / 16 * 1rem); }
+.footer { margin-top: calc(64 / 16 * 1rem); padding-top: calc(24 / 16 * 1rem); border-top: 1px solid var(--color-neutral-solid-gray-420); color: var(--color-neutral-solid-gray-600); font-size: calc(14 / 16 * 1rem); line-height: 1.7; }
+.footer p + p { margin-top: calc(8 / 16 * 1rem) !important; }
+@media (max-width: 40em) {
+  .page .dads-heading[data-size="36"] .dads-heading__heading { font-size: calc(28 / 16 * 1rem); }
+  .page .dads-heading[data-size="24"] .dads-heading__heading { font-size: calc(20 / 16 * 1rem); }
+  .step-no { width: calc(28 / 16 * 1rem); height: calc(28 / 16 * 1rem); font-size: calc(16 / 16 * 1rem); margin-right: calc(8 / 16 * 1rem); }
+}
+[hidden] { display: none !important; }
+</style>
+</head>
+<body data-os="mac">
+<script>document.body.setAttribute("data-os", /win/i.test((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || navigator.userAgent || "") ? "win" : "mac");</script>
+<main class="page">
+
+  <div class="dads-heading" data-size="36">
+    <h1 class="dads-heading__heading">フィルムプロファイル焼き込みツール</h1>
+  </div>
+  <p class="lead">Capture Oneのカメラプロファイルに、フィルムの色の特性を焼き込んだICCプロファイルを作ります。元のプロファイルの色を土台にするので、お使いのカメラに合ったフィルムの色になります。</p>
+
+  <p class="note" style="margin-top: calc(16 / 16 * 1rem) !important;">選んだプロファイルは、このブラウザの中だけで処理されます。外部には送信されません。</p>
+
+  <!-- Step 1 -->
+  <section class="section" aria-labelledby="h-step1">
+    <div class="dads-heading" data-size="24">
+      <h2 class="dads-heading__heading" id="h-step1"><span class="step-no" aria-hidden="true">1</span>元にするプロファイルを選ぶ</h2>
+    </div>
+    <div class="stack-16">
+      <p>Capture One が持っているカメラプロファイルのフォルダを選ぶと、カメラ名で探せます。</p>
+
+      <details class="where">
+        <summary>フォルダの場所</summary>
+        <div class="where-body stack-16">
+          <p>「フォルダを選択」を押すと、フォルダを開くダイアログが出ます。そこで次の場所を開いてください。</p>
+          <div data-os="mac">
+            <p><b>Mac</b></p>
+            <div class="path-build">
+              <div class="dads-form-control-label" data-size="sm">
+                <label class="dads-form-control-label__label" for="mac-app">アプリ名</label>
+                <div class="dads-form-control-label__field">
+                  <span class="dads-input-text">
+                    <input id="mac-app" class="dads-input-text__input" type="text" data-size="sm" value="Capture One" list="mac-app-list" autocomplete="off" spellcheck="false">
+                  </span>
+                  <datalist id="mac-app-list">
+                    <option value="Capture One"></option><option value="Capture One 23"></option><option value="Capture One 22"></option><option value="Capture One 21"></option><option value="Capture One 20"></option>
+                  </datalist>
+                </div>
+              </div>
+              <div class="dads-form-control-label" data-size="sm">
+                <label class="dads-form-control-label__label" for="mac-fw">フレームワーク</label>
+                <div class="dads-form-control-label__field">
+                  <span class="dads-select"><span class="dads-select__control">
+                    <select class="dads-select__select" data-size="sm" id="mac-fw">
+                      <option>ImageProcessing</option><option>ImageCore</option><option>AppCore</option>
+                    </select>
+                  </span></span>
+                </div>
+              </div>
+            </div>
+            <span class="note">アプリ名は、Finder の「アプリケーション」にある名前の通りに選択してください。見つからないときはフレームワークを切り替えてください。</span>
+            <ol class="steps" style="margin-top: calc(12 / 16 * 1rem);">
+              <li>ダイアログで <kbd>command</kbd> + <kbd>shift</kbd> + <kbd>G</kbd> を押します。</li>
+              <li>出てきた入力欄に、次のパスを貼り付けて <kbd>return</kbd> を押します。
+                <span class="path-row">
+                  <code class="path" id="path-mac"></code>
+                  <button class="dads-button" data-type="outline" data-size="xs" type="button" data-copy="path-mac">コピー</button>
+                </span>
+              </li>
+              <li>「開く」を押します。</li>
+            </ol>
+          </div>
+          <div data-os="win">
+            <p><b>Windows</b></p>
+            <div class="path-build">
+              <div class="dads-form-control-label" data-size="sm">
+                <label class="dads-form-control-label__label" for="win-ver">バージョンのフォルダ名</label>
+                <div class="dads-form-control-label__field">
+                  <span class="dads-input-text">
+                    <input id="win-ver" class="dads-input-text__input" type="text" data-size="sm" value="Capture One 23" autocomplete="off" spellcheck="false">
+                  </span>
+                </div>
+              </div>
+            </div>
+            <ol class="steps" style="margin-top: calc(12 / 16 * 1rem);">
+              <li>ダイアログ上部のアドレス欄に、次のパスを貼り付けて <kbd>Enter</kbd> を押します。
+                <span class="path-row">
+                  <code class="path" id="path-win"></code>
+                  <button class="dads-button" data-type="outline" data-size="xs" type="button" data-copy="path-win">コピー</button>
+                </span>
+              </li>
+              <li>「フォルダーの選択」を押します。</li>
+            </ol>
+          </div>
+          <p><button class="dads-button os-toggle" data-type="text" data-size="xs" type="button">Windows の場合を表示</button></p>
+        </div>
+      </details>
+
+      <div class="dads-file-upload" data-multiple="false" id="upload">
+        <input class="dads-file-upload__input" type="file" id="dir-input" webkitdirectory directory multiple aria-describedby="upload-errors">
+        <input class="dads-file-upload__input" type="file" id="file-input" accept=".icc,.icm,application/vnd.iccprofile" multiple aria-describedby="upload-errors">
+        <div class="dads-u-visually-hidden" aria-live="polite" id="upload-announcer"></div>
+        <div class="dads-file-upload__inner">
+          <div class="dads-file-upload__drop-area" id="drop-area">
+            <div class="dads-file-upload__button-area">
+              <button class="dads-button" data-type="outline" data-size="md" type="button" id="dir-button">フォルダを選択</button>
+              <p>または、このエリア内にドラッグ＆ドロップ</p>
+            </div>
+            <ul class="dads-file-upload__error-messages" id="upload-errors"></ul>
+          </div>
+          <p class="dads-file-upload__empty-message" id="empty-message">まだ何も選ばれていません</p>
+          <ul class="dads-file-upload__file-list" id="file-list" hidden>
+            <li class="dads-file-upload__file-item">
+              <div class="dads-file-upload__file-marker"></div>
+              <div class="dads-file-upload__file-info">
+                <p>
+                  <span class="dads-file-upload__file-name" id="file-name"></span>
+                  <span class="dads-file-upload__file-meta" id="file-meta"></span>
+                </p>
+              </div>
+              <button class="dads-file-upload__remove-button dads-button" data-type="text" data-size="xs" type="button" id="remove-button">解除</button>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <p class="note" id="scan-status" role="status" aria-live="polite" hidden></p>
+
+      <div id="search-box" class="stack-16" hidden>
+        <div class="dads-form-control-label" data-size="md">
+          <label class="dads-form-control-label__label" for="camera-query">カメラ名で検索</label>
+          <p id="query-support" class="dads-form-control-label__support-text">例：Z5、EOS R5、X-T4。スペースで区切ると、すべての語を含むものだけが残ります。<br>Neutral や Standard のように、絵作りの入っていないものが編集しやすいためおすすめです。Portrait や Vivid のような演出済みのプロファイルを元にすると、その演出の上にフィルムの色が重なります。</p>
+          <div class="dads-form-control-label__field">
+            <span class="dads-input-text">
+              <input id="camera-query" class="dads-input-text__input" type="search" data-size="md" aria-describedby="query-support" autocomplete="off" spellcheck="false">
+            </span>
+          </div>
+        </div>
+        <p class="note" id="hit-summary"></p>
+        <ul class="hits" id="hits"></ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- Step 2 -->
+  <section class="section" aria-labelledby="h-step2">
+    <div class="dads-heading" data-size="24">
+      <h2 class="dads-heading__heading" id="h-step2"><span class="step-no" aria-hidden="true">2</span>作成してダウンロード</h2>
+    </div>
+    <div class="stack-16">
+      <p id="summary"></p>
+
+      <div class="dest-block">
+        <p>置き場所</p>
+        <span class="note">ZIPを展開してできる2つのフォルダを、それぞれ次の場所に移します。</span>
+        <p class="dest-sub"><code class="icc-dir">ICC (カメラ名)</code> の中身（ICCプロファイル）</p>
+        <span class="path-row" data-os="mac">
+          <code class="path" id="dest-mac">/Library/ColorSync/Profiles</code>
+          <button class="dads-button" data-type="outline" data-size="xs" type="button" data-copy="dest-mac">コピー</button>
+        </span>
+        <span class="path-row" data-os="win">
+          <code class="path" id="dest-win">%LOCALAPPDATA%\CaptureOne\Color Profiles</code>
+          <button class="dads-button" data-type="outline" data-size="xs" type="button" data-copy="dest-win">コピー</button>
+        </span>
+        <p class="dest-sub"><code class="film-dir">1 Film (カメラ名)</code> フォルダごと（スタイル）</p>
+        <span class="path-row" data-os="mac">
+          <code class="path" id="style-mac">~/Library/Application Support/Capture One/Styles</code>
+          <button class="dads-button" data-type="outline" data-size="xs" type="button" data-copy="style-mac">コピー</button>
+        </span>
+        <span class="path-row" data-os="win">
+          <code class="path" id="style-win">%LOCALAPPDATA%\CaptureOne\Styles50</code>
+          <button class="dads-button" data-type="outline" data-size="xs" type="button" data-copy="style-win">コピー</button>
+        </span>
+        <span class="note" data-os="mac">Finder で <kbd>command</kbd> + <kbd>shift</kbd> + <kbd>G</kbd> を押し、貼り付けると開きます。</span>
+        <span class="note" data-os="win">エクスプローラーのアドレス欄に貼り付けると開きます。<code>Styles50</code> がない場合は <code>Styles</code> に入れてください。</span>
+        <span class="note"><button class="dads-button os-toggle" data-type="text" data-size="xs" type="button">Windows の場合を表示</button></span>
+      </div>
+
+      <div class="actions">
+        <button class="dads-button" data-type="solid-fill" data-size="lg" type="button" id="run-button">ICCプロファイルを作成してダウンロード</button>
+      </div>
+      <div class="progress" id="progress" hidden><span id="progress-bar"></span></div>
+      <p class="status" id="status" role="status" aria-live="polite"></p>
+
+      <div class="dads-notification-banner" data-style="standard" data-type="success" id="done-banner" hidden tabindex="-1">
+        <h2 class="dads-notification-banner__heading">
+          <svg class="dads-notification-banner__icon" width="24" height="24" viewBox="0 0 24 24" role="img" aria-label="成功"><circle cx="12" cy="12" r="10" fill="currentcolor"/><path d="m17.6 9.6-7 7-4.3-4.3L7.7 11l2.9 2.9 5.7-5.6 1.3 1.4Z" fill="#fff"/></svg>
+          <span class="dads-notification-banner__heading-text" id="done-title">作成しました</span>
+        </h2>
+        <div class="dads-notification-banner__body"><p id="done-body"></p></div>
+      </div>
+
+      <div class="dads-notification-banner" data-style="standard" data-type="error" id="error-banner" hidden tabindex="-1">
+        <h2 class="dads-notification-banner__heading">
+          <svg class="dads-notification-banner__icon" width="24" height="24" viewBox="0 0 24 24" role="img" aria-label="エラー"><path d="M8.25 21 3 15.75v-7.5L8.25 3h7.5L21 8.25v7.5L15.75 21h-7.5Z" fill="currentcolor"/><path d="m12 13.4-2.85 2.85-1.4-1.4L10.6 12 7.75 9.15l1.4-1.4L12 10.6l2.85-2.85 1.4 1.4L13.4 12l2.85 2.85-1.4 1.4L12 13.4Z" fill="#fff"/></svg>
+          <span class="dads-notification-banner__heading-text" id="error-title">作成できませんでした</span>
+        </h2>
+        <div class="dads-notification-banner__body"><p id="error-body"></p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Preview -->
+  <section class="section" aria-labelledby="h-preview">
+    <div class="dads-heading" data-size="24">
+      <h2 class="dads-heading__heading" id="h-preview">仕上がりの見本</h2>
+    </div>
+    <div class="stack-16">
+      <p class="note">カラーチェッカーとグレーの階調を、それぞれのフィルムのモデルに通した色です。元のプロファイルの色は含まないため、実際の写真とは少し異なります。</p>
+      <div class="previews" id="previews"></div>
+    </div>
+  </section>
+
+  <!-- How to use -->
+  <section class="section" aria-labelledby="h-howto">
+    <div class="dads-heading" data-size="24">
+      <h2 class="dads-heading__heading" id="h-howto">Capture One での使い方</h2>
+    </div>
+    <ol class="steps">
+      <li>ダウンロードしたZIPファイルを展開します。<code class="icc-dir">ICC (カメラ名)</code> と <code class="film-dir">1 Film (カメラ名)</code> の2つのフォルダが入っています。</li>
+      <li><code class="icc-dir">ICC (カメラ名)</code> フォルダの中身を、手順2に出ているICCプロファイルの置き場所に移します。</li>
+      <li><code class="film-dir">1 Film (カメラ名)</code> フォルダをフォルダごと、手順2に出ているスタイルの置き場所に移します。Capture One のスタイル一覧に、このフォルダ名でまとまって並びます。</li>
+      <li>Capture One を再起動します。</li>
+      <li>写真を開き、スタイルを適用します。ベース特性のICCプロファイルとカーブは、スタイルが自動で設定します。</li>
+    </ol>
+    <p class="note" style="margin-top: calc(16 / 16 * 1rem);">スタイルはプロファイルを名前で参照しています。ICCプロファイルを所定のフォルダに配置し再起動すると選択可能になります。</p>
+    <p class="note">リバーサルはコントラストが強いため、暗く感じたら露出を +0.3〜0.5 ほど上げてください。</p>
+  </section>
+
+  <footer class="footer">
+    <p>Capture One は、その権利者の商標または登録商標です。このツールは Capture One の開発元とは関係がありません。フィルムの名前は、元にしたデータシートを示す独自の略称です。元のプロファイルはカメラメーカーやソフトウェアの権利者のものです。作成したプロファイルは個人で使い、配布しないでください。</p>
+    <p>画面のデザインには、デジタル庁デザインシステムのデザイントークンとコードスニペット（MIT License, Copyright (c) 2023–2025 デジタル庁）を使っています。</p>
+  </footer>
+</main>
+
+<script>
+window.FILM_DATA = /*__DATA__*/;
+</script>
+<script>
+/*__ENGINE__*/
+</script>
+<script>
+/*__APP__*/
+</script>
+</body>
+</html>
