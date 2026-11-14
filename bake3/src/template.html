@@ -48,8 +48,11 @@ body[data-os="mac"] [data-os="win"], body[data-os="win"] [data-os="mac"] { displ
 .hit { display: block; width: 100%; box-sizing: border-box; text-align: left; border: 0; background: none; font: inherit; color: inherit; padding: calc(10 / 16 * 1rem) calc(16 / 16 * 1rem); cursor: pointer; line-height: 1.5; }
 .hit:hover { background: var(--color-neutral-solid-gray-50); }
 .hit:focus-visible { outline: calc(3 / 16 * 1rem) solid var(--color-neutral-black); outline-offset: calc(-3 / 16 * 1rem); }
-.hit[aria-current="true"] { background: var(--color-primitive-blue-50, #e8f1fe); box-shadow: inset calc(4 / 16 * 1rem) 0 0 var(--color-primitive-blue-900); }
+.hit[aria-pressed="true"] { background: var(--color-primitive-blue-50, #e8f1fe); box-shadow: inset calc(4 / 16 * 1rem) 0 0 var(--color-primitive-blue-900); }
 .hit-cam { font-weight: 700; overflow-wrap: anywhere; }
+.mycam-row { display: flex; align-items: stretch; }
+.mycam-row .hit { flex: 1; }
+.mycam-del { flex-shrink: 0; align-self: center; margin-right: calc(12 / 16 * 1rem); }
 .tag { display: inline-block; margin-left: calc(8 / 16 * 1rem); padding: 0 calc(8 / 16 * 1rem); border-radius: calc(4 / 16 * 1rem); font-size: calc(12 / 16 * 1rem); font-weight: 400; vertical-align: calc(1 / 16 * 1rem); }
 .tag-good { background: var(--color-primitive-green-100, #d7f0dc); color: var(--color-semantic-success-2, #19603a); }
 .tag-bad { background: var(--color-neutral-solid-gray-100, #ebebeb); color: var(--color-neutral-solid-gray-600); }
@@ -98,7 +101,14 @@ ul.plain > li + li { margin-top: calc(6 / 16 * 1rem); }
       <h2 class="dads-heading__heading" id="h-step1"><span class="step-no" aria-hidden="true">1</span>元にするプロファイルを選ぶ</h2>
     </div>
     <div class="stack-16">
-      <p>Capture One が持っているカメラプロファイルのフォルダを選ぶと、カメラ名で探せます。</p>
+      <div id="mycams" class="stack-16 mycams" hidden>
+        <div class="dads-heading" data-size="18"><h3 class="dads-heading__heading">マイカメラ</h3></div>
+        <p class="note">前に作ったカメラです。押すと選択、もう一度押すと解除です。このブラウザの中にだけ保存しています。</p>
+        <ul class="hits" id="mycam-list"></ul>
+        <p><button class="dads-button" data-type="outline" data-size="sm" type="button" id="mycam-all">すべて選ぶ</button></p>
+      </div>
+
+      <p id="lead-folder">Capture One が持っているカメラプロファイルのフォルダを選ぶと、カメラ名で探せます。</p>
 
       <details class="where">
         <summary>フォルダの場所</summary>
@@ -180,18 +190,7 @@ ul.plain > li + li { margin-top: calc(6 / 16 * 1rem); }
             <ul class="dads-file-upload__error-messages" id="upload-errors"></ul>
           </div>
           <p class="dads-file-upload__empty-message" id="empty-message">まだ何も選ばれていません</p>
-          <ul class="dads-file-upload__file-list" id="file-list" hidden>
-            <li class="dads-file-upload__file-item">
-              <div class="dads-file-upload__file-marker"></div>
-              <div class="dads-file-upload__file-info">
-                <p>
-                  <span class="dads-file-upload__file-name" id="file-name"></span>
-                  <span class="dads-file-upload__file-meta" id="file-meta"></span>
-                </p>
-              </div>
-              <button class="dads-file-upload__remove-button dads-button" data-type="text" data-size="xs" type="button" id="remove-button">解除</button>
-            </li>
-          </ul>
+          <ul class="dads-file-upload__file-list" id="file-list" hidden></ul>
         </div>
       </div>
 
@@ -200,7 +199,7 @@ ul.plain > li + li { margin-top: calc(6 / 16 * 1rem); }
       <div id="search-box" class="stack-16" hidden>
         <div class="dads-form-control-label" data-size="md">
           <label class="dads-form-control-label__label" for="camera-query">カメラ名で検索</label>
-          <p id="query-support" class="dads-form-control-label__support-text">例：Z5、EOS R5、X-T4。スペースで区切ると、すべての語を含むものだけが残ります。<br>Neutral や Standard のように、絵作りの入っていないものが編集しやすいためおすすめです。Portrait や Vivid のような演出済みのプロファイルを元にすると、その演出の上にフィルムの色が重なります。</p>
+          <p id="query-support" class="dads-form-control-label__support-text">例：Z5、EOS R5、X-T4。スペースで区切ると、すべての語を含むものだけが残ります。<br>押すと選択、もう一度押すと解除です。別のカメラも続けて選ぶと、まとめて1つのZIPで作れます（8台まで。同じカメラは1つだけ）。<br>Neutral や Standard のように、絵作りの入っていないものが編集しやすいためおすすめです。Portrait や Vivid のような演出済みのプロファイルを元にすると、その演出の上にフィルムの色が重なります。</p>
           <div class="dads-form-control-label__field">
             <span class="dads-input-text">
               <input id="camera-query" class="dads-input-text__input" type="search" data-size="md" aria-describedby="query-support" autocomplete="off" spellcheck="false">
@@ -223,7 +222,7 @@ ul.plain > li + li { margin-top: calc(6 / 16 * 1rem); }
 
       <div class="dest-block">
         <p>置き場所</p>
-        <span class="note">ZIPを展開してできる2つのフォルダを、それぞれ次の場所に移します。</span>
+        <span class="note">ZIPを展開してできる2つのフォルダを、それぞれ次の場所に移します。複数のカメラを選んだときは、カメラごとに同じ2つが並んでいます。</span>
         <p class="dest-sub"><code class="icc-dir">ICC (カメラ名)</code> の中身（ICCプロファイル）</p>
         <span class="path-row" data-os="mac">
           <code class="path" id="dest-mac">/Library/ColorSync/Profiles</code>
@@ -290,7 +289,7 @@ ul.plain > li + li { margin-top: calc(6 / 16 * 1rem); }
     <ol class="steps">
       <li>ダウンロードしたZIPファイルを展開します。<code class="icc-dir">ICC (カメラ名)</code> と <code class="film-dir">1 Film (カメラ名)</code> の2つのフォルダが入っています。</li>
       <li><code class="icc-dir">ICC (カメラ名)</code> フォルダの中身を、手順2に出ているICCプロファイルの置き場所に移します。</li>
-      <li><code class="film-dir">1 Film (カメラ名)</code> フォルダをフォルダごと、手順2に出ているスタイルの置き場所に移します。Capture One のスタイル一覧に、このフォルダ名でまとまって並びます。</li>
+      <li><code class="film-dir">1 Film (カメラ名)</code> フォルダをフォルダごと、手順2に出ているスタイルの置き場所に移します。Capture One のスタイル一覧に、このフォルダ名でまとまって並びます。中は <code>Negative</code>（カラーネガ）、<code>Positive</code>（リバーサル）、<code>B&amp;W</code>（モノクロ）の3つに分かれています。</li>
       <li>Capture One を再起動します。</li>
       <li>写真を開き、スタイルを適用します。ベース特性のICCプロファイルとカーブは、スタイルが自動で設定します。</li>
     </ol>

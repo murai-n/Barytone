@@ -5,7 +5,9 @@
     var M = C.M_XYZ_to_RGB; return [0, 1, 2].map(function (i) { return M[i][0] * X[0] + M[i][1] * X[1] + M[i][2] * X[2]; });
   });
   var $ = function (id) { return document.getElementById(id); };
-  var state = { buf: null, file: null, info: null, cands: [], picked: null };
+  /* picks: the camera profiles chosen, one per camera ({ file, buf, info, cand }) */
+  var state = { picks: [], cands: [] };
+  var MAX_CAMERAS = 8;   /* each camera is ~75 profiles, ~17MB in the ZIP and ~8s of baking */
 
   /* ---------- sRGB helpers for the preview ---------- */
   function oetf(l) { l = Math.min(Math.max(l, 0), 1); return l <= 0.0031308 ? l * 12.92 : 1.055 * Math.pow(l, 1 / 2.4) - 0.055; }
@@ -14,26 +16,31 @@
   /* ---------- what gets made: every film, every variant ---------- */
   var JOBS = [];
   C.films.forEach(function (f) { f.variants.forEach(function (v) { JOBS.push({ film: f, variant: v }); }); });
-  function camName() { return state.file ? camOf(state.file.name).replace(/[\\/:*?"<>|\u0000-\u001f]/g, "").trim() || "Camera" : "Camera"; }
-  function fileName(j) { return camName() + "-Film " + j.film.id + " " + j.variant.id; }
+  function camName(p) { return p ? camOf(p.file.name).replace(/[\\/:*?"<>|\u0000-\u001f]/g, "").trim() || "Camera" : "Camera"; }
+  function fileName(p, j) { return camName(p) + "-Film " + j.film.id + " " + j.variant.id; }
   /* 表示用のカメラ名：先頭のメーカー名のあとに空白を入れる（NikonZ5 → Nikon Z5） */
   var BRANDS = [["PhaseOne", "Phase One"], ["OMSystem", "OM System"], ["Fujifilm", "Fujifilm"], ["FUJIFILM", "FUJIFILM"], ["Hasselblad", "Hasselblad"], ["Panasonic", "Panasonic"], ["Olympus", "Olympus"], ["Pentax", "Pentax"], ["Nikon", "Nikon"], ["Canon", "Canon"], ["Sony", "Sony"], ["Leica", "Leica"], ["Ricoh", "Ricoh"], ["Sigma", "Sigma"], ["Mamiya", "Mamiya"], ["Leaf", "Leaf"], ["Samsung", "Samsung"]];
-  function camDisplay() {
-    var c = camName();
+  function camDisplay(p) {
+    var c = camName(p);
     for (var i = 0; i < BRANDS.length; i++) {
       var b = BRANDS[i][0];
       if (c.indexOf(b) === 0 && c.length > b.length) return BRANDS[i][1] + " " + c.slice(b.length).replace(/^[\s_-]+/, "");
     }
     return c;
   }
-  function rootDir() { return camName() + "-film-profiles"; }
-  function iccDir() { return "ICC (" + camDisplay() + ")"; }
-  function filmDir() { return "1 Film (" + camDisplay() + ")"; }
-  function styleName(j) {
+  /* one camera: <cam>-film-profiles.zip as before; several: one ZIP, each camera's two folders side by side */
+  function rootDir() { return state.picks.length > 1 ? "film-profiles" : camName(state.picks[0]) + "-film-profiles"; }
+  function zipName() { return state.picks.length > 1 ? "film-profiles-" + state.picks.length + "-cameras.zip" : camName(state.picks[0]) + "-film-profiles.zip"; }
+  function iccDir(p) { return "ICC (" + camDisplay(p) + ")"; }
+  function filmDir(p) { return "1 Film (" + camDisplay(p) + ")"; }
+  /* inside the Film folder: one subfolder per kind, so the style list groups them */
+  var KIND_DIR = { neg: "Negative", pos: "Positive", mono: "B&W" };
+  function kindDir(j) { return KIND_DIR[j.film.kind] || "Other"; }
+  function styleName(p, j) {
     var f = j.film.kind === "mono" && j.variant.id !== "base" ? " " + j.variant.id : "";   /* one style per contrast filter */
-    return "Film " + j.film.id + f + " (" + camDisplay() + ")";
+    return "Film " + j.film.id + f + " (" + camDisplay(p) + ")";
   }
-  function filmCurveName() { return camName() + "-Linear Response.fcrv"; }
+  function filmCurveName(p) { return camName(p) + "-Linear Response.fcrv"; }
 
   /* ---------- preview ---------- */
   /* a mono ICC holds the negative; the preview shows it printed on the preview paper */
@@ -43,8 +50,8 @@
     if (film.kind !== "mono") return o;
     var P = C.MONO.preview, M = C.M_RGB_to_XYZ, Y = o[0] * M[1][0] + o[1] * M[1][1] + o[2] * M[1][2];
     var n = P.v.length - 1, t = Math.min(Math.max(Math.pow(Math.max(Y, 0), 1 / C.MONO.ENC), 0), 1) * n;
-    var i = Math.min(Math.floor(t), n - 1), y = P.Y[i] + (t - i) * (P.Y[i + 1] - P.Y[i]);
-    return [y, y, y];
+    var i = Math.min(Math.floor(t), n - 1), f = t - i, A = P.rgb[i], B = P.rgb[i + 1];
+    return [A[0] + f * (B[0] - A[0]), A[1] + f * (B[1] - A[1]), A[2] + f * (B[2] - A[2])];
   }
   function drawPreview(canvas, film, variant) {
     var cols = 12, rows = 2, W = 1200, ph = 64, rampH = 36, gap = 4;
@@ -88,13 +95,14 @@
     });
   }
   function refresh() {
-    var ready = !!state.buf;
-    Array.prototype.forEach.call(document.querySelectorAll(".icc-dir"), function (el) { el.textContent = ready ? iccDir() : "ICC (カメラ名)"; });
-    Array.prototype.forEach.call(document.querySelectorAll(".film-dir"), function (el) { el.textContent = ready ? filmDir() : "1 Film (カメラ名)"; });
-    $("summary").textContent = ready
-      ? JOBS.length + "種類のフィルムについて、ICCプロファイルと、それを使うスタイルを作ります。" + fileName(JOBS[0]) + ".icm と " + styleName(JOBS[0]) + ".costyle のような名前で、1つのZIPにまとまります。"
-      : "先に手順1でプロファイルを選んでください。";
-    $("run-button").disabled = !ready;
+    var n = state.picks.length, p = state.picks[0], more = n > 1 ? " など" : "";
+    Array.prototype.forEach.call(document.querySelectorAll(".icc-dir"), function (el) { el.textContent = n ? iccDir(p) + more : "ICC (カメラ名)"; });
+    Array.prototype.forEach.call(document.querySelectorAll(".film-dir"), function (el) { el.textContent = n ? filmDir(p) + more : "1 Film (カメラ名)"; });
+    $("summary").textContent = !n ? "先に手順1でプロファイルを選んでください。"
+      : (n > 1 ? n + "台のカメラ（" + state.picks.map(function (q) { return camDisplay(q); }).join("、") + "）それぞれに、" : "")
+        + JOBS.length + "種類のフィルムについて、ICCプロファイルと、それを使うスタイルを作ります。" + fileName(p, JOBS[0]) + ".icm と " + styleName(p, JOBS[0]) + ".costyle のような名前で、1つのZIP（" + zipName() + "）にまとまります。";
+    $("run-button").disabled = !n;
+    $("run-button").textContent = n > 1 ? n + "台分のICCプロファイルを作成してダウンロード" : "ICCプロファイルを作成してダウンロード";
   }
 
   /* ---------- file selection ---------- */
@@ -105,22 +113,37 @@
     $("upload").setAttribute("data-has-error", msg ? "true" : "false");
     if (msg) $("upload-announcer").textContent = msg;
   }
-  function clearFile() {
-    state.buf = null; state.file = null; state.info = null; state.picked = null;
-    forget(); say("");
+  function dropPick(i) {
+    state.picks.splice(i, 1);
+    remember(); say("");
     $("file-input").value = ""; $("dir-input").value = "";
-    syncEmpty();
+    renderPicks();
     if (state.cands.length) renderHits();
     refresh();
   }
+  function renderPicks() {
+    if (mycams.length) setTimeout(renderMyCams, 0);
+    $("file-list").innerHTML = state.picks.map(function (p, i) {
+      return '<li class="dads-file-upload__file-item"><div class="dads-file-upload__file-marker"></div>' +
+        '<div class="dads-file-upload__file-info"><p><span class="dads-file-upload__file-name">' + esc(p.file.name) + "</span>" +
+        '<span class="dads-file-upload__file-meta">' + esc(camDisplay(p) + "・" + fmtSize(p.file.size)) + "</span></p></div>" +
+        '<button class="dads-file-upload__remove-button dads-button" data-type="text" data-size="xs" type="button" data-remove="' + i + '" aria-label="' + esc(p.file.name) + ' を解除">解除</button></li>';
+    }).join("");
+    $("upload").setAttribute("data-multiple", state.picks.length > 1 ? "true" : "false");
+    syncEmpty();
+  }
   function syncEmpty() {
-    var picked = !!state.buf;
+    var picked = state.picks.length > 0;
     $("file-list").hidden = !picked;
     $("empty-message").hidden = picked || !$("search-box").hidden;
   }
   function fmtSize(n) { return n >= 1048576 ? (n / 1048576).toFixed(1) + "MB" : Math.max(1, Math.round(n / 1024)) + "KB"; }
   var KIND = { scnr: "入力プロファイル（カメラ・スキャナー用）", mntr: "モニター用", prtr: "プリンター用", spac: "色空間", abst: "抽象", link: "デバイスリンク" };
-  function takeFile(file, fromCache) {
+  function pickIndex(file) {
+    for (var i = 0; i < state.picks.length; i++) if (state.picks[i].file === file) return i;
+    return -1;
+  }
+  function takeFile(file, fromCache, cand) {
     setUploadError("");
     if (!file) return;
     if (!ICC_RE.test(file.name)) { setUploadError("ICCプロファイル（.icc または .icm）を選んでください。"); return; }
@@ -128,14 +151,17 @@
     var reader = new FileReader();
     reader.onload = function () {
       var buf = reader.result, info;
-      try { info = FB.inspect(buf); } catch (err) { clearFile(); setUploadError(file.name + "：" + (err && err.message ? err.message : "読み込めませんでした。")); return; }
-      state.buf = buf; state.file = file; state.info = info;
-      $("file-name").textContent = file.name;
-      $("file-meta").textContent = fmtSize(file.size) + "（" + file.size.toLocaleString("ja-JP") + "バイト）";
-      syncEmpty();
-      $("upload-announcer").textContent = file.name + " を読み込みました。";
+      try { info = FB.inspect(buf); } catch (err) { setUploadError(file.name + "：" + (err && err.message ? err.message : "読み込めませんでした。")); return; }
+      var p = { file: file, buf: buf, info: info, cand: cand || null }, cam = camName(p), msg = file.name + " を読み込みました。";
+      /* one profile per camera: the names inside the ZIP are per camera, so a second pick replaces the first */
+      var same = state.picks.findIndex(function (q) { return camName(q) === cam; });
+      if (same >= 0) { msg = camDisplay(p) + " は " + file.name + " に入れ替えました。"; state.picks[same] = p; }
+      else if (state.picks.length >= MAX_CAMERAS) { setUploadError("一度に選べるのは" + MAX_CAMERAS + "台までです。どれかを解除してから選んでください。"); return; }
+      else state.picks.push(p);
+      renderPicks();
+      $("upload-announcer").textContent = msg;
       if (fromCache) say("前回選んだプロファイルです。別のカメラにするときは「解除」を押してください。");
-      else { say(""); remember(file, buf); }
+      else { say(""); remember(); }
       if (state.cands.length) renderHits();
       refresh();
     };
@@ -188,7 +214,7 @@
     box.innerHTML = shown.map(function (c) {
       var i = state.cands.indexOf(c), sub = [c.rest, state.showDir ? c.dir : ""].filter(Boolean).join("　/　");
       var tag = c.rank === 0 ? '<span class="tag tag-good">おすすめ</span>' : c.rank === 2 ? '<span class="tag tag-bad">向きません</span>' : "";
-      return '<li><button type="button" class="hit" data-i="' + i + '"' + (state.picked === c ? ' aria-current="true"' : "") + ">" +
+      return '<li><button type="button" class="hit" data-i="' + i + '"' + (state.picks.some(function (p) { return p.cand === c; }) ? ' aria-pressed="true"' : ' aria-pressed="false"') + ">" +
         '<span class="hit-cam">' + esc(c.cam) + "</span>" + tag +
         (sub ? '<span class="hit-rest">' + esc(sub) + "</span>" : "") + "</button></li>";
     }).join("");
@@ -203,7 +229,9 @@
   $("hits").addEventListener("click", function (e) {
     var btn = e.target.closest && e.target.closest(".hit"); if (!btn) return;
     var c = state.cands[+btn.getAttribute("data-i")]; if (!c) return;
-    state.picked = c; takeFile(c.file);
+    var k = state.picks.findIndex(function (p) { return p.cand === c; });
+    if (k >= 0) { dropPick(k); $("upload-announcer").textContent = c.name + " を解除しました。"; return; }   /* clicking a picked one unpicks it */
+    takeFile(c.file, false, c);
   });
   var qTimer = null;
   $("camera-query").addEventListener("input", function () {
@@ -273,21 +301,69 @@
       });
     });
   }
-  function remember(file, buf) {
+  /* every picked profile, under KEY_ALL; the one-profile record of earlier versions is still read */
+  var KEY_ALL = "picks", KEY_MY = "mycams";
+  /* my cameras: every camera a ZIP was saved for, newest profile per camera, kept until deleted here */
+  var mycams = [];
+  function saveMyCams() {
+    try { var recs = mycams.map(function (m) { return { name: m.name, buf: m.buf, at: m.at }; });
+      idbRun("readwrite", function (st) { st.put(recs, KEY_MY); })["catch"](function () {}); } catch (e) {}
+  }
+  function loadMyCams() {
     try {
-      idbRun("readwrite", function (st) { st.put({ name: file.name, buf: buf }, KEY); })["catch"](function () {});
+      idbRun("readonly", function (st) { return st.get(KEY_MY); }).then(function (recs) {
+        mycams = (recs || []).filter(function (r) { return r && r.buf && r.name; });
+        renderMyCams();
+      }, function () {});
     } catch (e) {}
   }
-  function forget() {
-    try { idbRun("readwrite", function (st) { st["delete"](KEY); })["catch"](function () {}); } catch (e) {}
+  function myCamOf(name) { return camName({ file: { name: name } }); }
+  function addMyCams(picks) {
+    var at = new Date().toISOString().slice(0, 10);
+    picks.forEach(function (p) {
+      var cam = camName(p), i = mycams.findIndex(function (m) { return myCamOf(m.name) === cam; }), rec = { name: p.file.name, buf: p.buf, at: at };
+      if (i >= 0) mycams[i] = rec; else mycams.push(rec);
+    });
+    mycams.sort(function (a, b) { return myCamOf(a.name).localeCompare(myCamOf(b.name), "en"); });
+    saveMyCams(); renderMyCams();
+  }
+  function renderMyCams() {
+    $("mycams").hidden = !mycams.length;
+    $("mycam-list").innerHTML = mycams.map(function (m, i) {
+      var cam = myCamOf(m.name), on = state.picks.some(function (p) { return camName(p) === cam && p.file.name === m.name; });
+      var disp = camDisplay({ file: { name: m.name } });
+      return '<li class="mycam-row"><button type="button" class="hit" data-my="' + i + '" aria-pressed="' + on + '">' +
+        '<span class="hit-cam">' + esc(disp) + "</span>" +
+        '<span class="hit-rest">' + esc(m.name + (m.at ? "　前回 " + m.at : "")) + "</span></button>" +
+        '<button type="button" class="dads-button mycam-del" data-type="text" data-size="xs" data-mydel="' + i + '" aria-label="' + esc(disp) + ' をマイカメラから削除">削除</button></li>';
+    }).join("");
+    $("lead-folder").textContent = mycams.length ? "ほかのカメラは、Capture One が持っているカメラプロファイルのフォルダを選ぶと、カメラ名で探せます。" : "Capture One が持っているカメラプロファイルのフォルダを選ぶと、カメラ名で探せます。";
+  }
+  function pickMyCam(i, only) {
+    var m = mycams[i], cam = myCamOf(m.name), k = state.picks.findIndex(function (p) { return camName(p) === cam && p.file.name === m.name; });
+    if (k >= 0) { if (!only) { dropPick(k); $("upload-announcer").textContent = m.name + " を解除しました。"; } return; }
+    var f; try { f = new File([m.buf], m.name, { type: "application/vnd.iccprofile" }); } catch (e) { return; }
+    takeFile(f, false, null);
+  }
+  function remember() {
+    try {
+      var recs = state.picks.map(function (p) { return { name: p.file.name, buf: p.buf }; });
+      idbRun("readwrite", function (st) { st["delete"](KEY); if (recs.length) st.put(recs, KEY_ALL); else st["delete"](KEY_ALL); })["catch"](function () {});
+    } catch (e) {}
   }
   function restore() {
     try {
-      idbRun("readonly", function (st) { return st.get(KEY); }).then(function (rec) {
-        if (!rec || !rec.buf || !rec.name || state.buf) return;
-        var f;
-        try { f = new File([rec.buf], rec.name, { type: "application/vnd.iccprofile" }); } catch (e) { return; }
-        takeFile(f, true);
+      idbRun("readonly", function (st) { return st.get(KEY_ALL); }).then(function (recs) {
+        if (recs && recs.length) return recs;
+        return idbRun("readonly", function (st) { return st.get(KEY); }).then(function (rec) { return rec ? [rec] : []; });
+      }).then(function (recs) {
+        if (state.picks.length) return;
+        (recs || []).forEach(function (rec) {
+          if (!rec || !rec.buf || !rec.name) return;
+          var f;
+          try { f = new File([rec.buf], rec.name, { type: "application/vnd.iccprofile" }); } catch (e) { return; }
+          takeFile(f, true);
+        });
       }, function () {});
     } catch (e) {}
   }
@@ -307,7 +383,7 @@
     setUploadError("");
     if (cands.length === 1) {
       $("search-box").hidden = true; say("");
-      state.picked = cands[0]; takeFile(cands[0].file); return;
+      takeFile(cands[0].file, false, cands[0]); return;
     }
     say(stopped ? "フォルダが大きいため、途中までを対象にしています。見つからない場合は、もっと下の階層のフォルダを選んでください。" : "");
     $("search-box").hidden = false; syncEmpty();
@@ -360,9 +436,23 @@
   $("dir-button").addEventListener("click", function () { $("dir-input").click(); });
   $("dir-input").addEventListener("change", function () { if (this.files && this.files.length) { beginScan(); takeFileList(this.files); } });
   $("file-input").addEventListener("change", function () { if (this.files && this.files.length) takeFileList(this.files); });
-  $("remove-button").addEventListener("click", function () {
-    clearFile(); $("upload-announcer").textContent = "選択を解除しました。";
-    (state.cands.length ? $("camera-query") : $("dir-button")).focus();
+  $("mycam-list").addEventListener("click", function (e) {
+    var d = e.target.closest && e.target.closest("[data-mydel]");
+    if (d) {
+      var m = mycams[+d.getAttribute("data-mydel")];
+      mycams.splice(+d.getAttribute("data-mydel"), 1); saveMyCams(); renderMyCams();
+      $("upload-announcer").textContent = myCamOf(m.name) + " をマイカメラから削除しました。";
+      return;
+    }
+    var b = e.target.closest && e.target.closest("[data-my]"); if (b) pickMyCam(+b.getAttribute("data-my"), false);
+  });
+  $("mycam-all").addEventListener("click", function () { mycams.forEach(function (m, i) { pickMyCam(i, true); }); });
+  $("file-list").addEventListener("click", function (e) {
+    var b = e.target.closest && e.target.closest("[data-remove]"); if (!b) return;
+    var name = state.picks[+b.getAttribute("data-remove")].file.name;
+    dropPick(+b.getAttribute("data-remove")); $("upload-announcer").textContent = name + " を解除しました。";
+    var next = $("file-list").querySelector("[data-remove]");
+    (next || (state.cands.length ? $("camera-query") : $("dir-button"))).focus();
   });
   var drop = $("drop-area"), depth = 0;
   drop.addEventListener("dragenter", function (e) { e.preventDefault(); depth++; drop.setAttribute("data-dragover", "true"); });
@@ -418,37 +508,37 @@
     $("error-banner").hidden = false; $("error-banner").focus();
   }
   $("run-button").addEventListener("click", function () {
-    var js = JOBS; if (!state.buf || !js.length) return;
+    var picks = state.picks.slice(), js = JOBS; if (!picks.length || !js.length) return;
     var btn = this; btn.disabled = true;
     $("done-banner").hidden = true; $("error-banner").hidden = true;
     $("progress").hidden = false; $("progress-bar").style.width = "0%";
-    var files = [], i = 0;
+    var files = [], i = 0, total = picks.length * js.length, root = rootDir(), zname = zipName();
     function step() {
-      if (i >= js.length) return finish();
-      var j = js[i], name = fileName(j);
-      $("status").textContent = (i + 1) + " / " + js.length + "：" + j.film.name + "（" + j.variant.label + "）を作成中…";
+      if (i >= total) return finish();
+      var p = picks[Math.floor(i / js.length)], j = js[i % js.length], name = fileName(p, j);
+      $("status").textContent = (picks.length > 1 ? camDisplay(p) + "　" : "") + (i % js.length + 1) + " / " + js.length + "：" + j.film.name + "（" + j.variant.label + "）を作成中…";
       setTimeout(function () {
         try {
-          var bytes = FB.bake(C, state.buf.slice(0), j.film, j.variant, name);
-          files.push({ name: rootDir() + "/" + iccDir() + "/" + name + ".icm", data: bytes });
-          var sty = FB.costyle(j.film, { icc: name + ".icm", filmCurve: filmCurveName(), name: styleName(j) });
-          files.push({ name: rootDir() + "/" + filmDir() + "/" + styleName(j) + ".costyle", data: new TextEncoder().encode(sty) });
+          var bytes = FB.bake(C, p.buf.slice(0), j.film, j.variant, name);
+          files.push({ name: root + "/" + iccDir(p) + "/" + name + ".icm", data: bytes });
+          var sty = FB.costyle(j.film, { icc: name + ".icm", filmCurve: filmCurveName(p), name: styleName(p, j) });
+          files.push({ name: root + "/" + filmDir(p) + "/" + kindDir(j) + "/" + styleName(p, j) + ".costyle", data: new TextEncoder().encode(sty) });
         } catch (err) {
           $("progress").hidden = true; $("status").textContent = ""; btn.disabled = false;
-          showError("作成できませんでした", err && err.message ? err.message : String(err)); return;
+          showError("作成できませんでした", camDisplay(p) + "：" + (err && err.message ? err.message : String(err))); return;
         }
-        i++; $("progress-bar").style.width = Math.round(i / js.length * 100) + "%";
+        i++; $("progress-bar").style.width = Math.round(i / total * 100) + "%";
         step();
       }, 16);
     }
     function finish() {
-      var zipName = camName() + "-film-profiles.zip";
       var zipped = FB.zip(files);
       $("status").textContent = "ダウンロードの確認画面を開いています…";
-      saveFile(zipName, zipped).then(function () {
+      saveFile(zname, zipped).then(function () {
         $("status").textContent = "";
-        $("done-title").textContent = js.length + "種類のフィルムを作成しました";
-        $("done-body").textContent = zipName + " を保存しました。ICCプロファイル" + js.length + "個とスタイル" + js.length + "個が入っています。下の「Capture One での使い方」の手順で読み込んでください。";
+        addMyCams(picks);
+        $("done-title").textContent = (picks.length > 1 ? picks.length + "台のカメラで" : "") + js.length + "種類のフィルムを作成しました";
+        $("done-body").textContent = zname + " を保存しました。ICCプロファイル" + total + "個とスタイル" + total + "個が入っています。下の「Capture One での使い方」の手順で読み込んでください。";
         $("done-banner").hidden = false; $("done-banner").focus();
       }).catch(function (err) {
         $("status").textContent = "";
@@ -459,5 +549,6 @@
     step();
   });
 
+  loadMyCams();
   syncOs(); buildPaths(); drawAllPreviews(); restore(); refresh();
 })();
