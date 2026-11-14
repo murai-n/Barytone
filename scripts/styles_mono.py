@@ -49,7 +49,7 @@ def fit(T):
 def curves(paper, grade):
     """{key: [(x, y), ...]} for one paper and grade."""
     T = target(paper, grade); out = {}
-    neutral = mono.PAPERS[paper]["tone"] == "neutral"
+    neutral = not any(any(v) for v in mono.TONE[paper].values())
     for c, k in enumerate(CH):
         if neutral and c != 1: continue
         idx, Ts = fit(T[:, c])

@@ -147,20 +147,37 @@ def print_density(paper, grade, logE):
     return np.interp(np.clip(logE, xs[0], xs[-1]), xs, d)
 
 # ---------------------------------------------------------------- tone
-TONE_XY = {"neutral": (0.0, 0.0), "warm": (0.016, 0.010), "cool": (-0.012, -0.006)}
+# Paper colour, CIELAB a*, b* (D65): the base where there is no silver, the
+# image where the silver is dense. Ilford states these only in words, quoted
+# below; the numbers are stand-ins sized to read as the words say on screen.
+TONE = {
+    # "MULTIGRADE IV RC has a bright base tint. The image colour remains cool-to-neutral"
+    "MGIV RC":     dict(base=(0.0, -1.5), image=(-0.3, -1.0)),
+    # "a cool-of-neutral image tone on a cool white base"
+    "RC Cooltone": dict(base=(0.0, -2.5), image=(-0.8, -4.0)),
+    # fibre base, no colour stated: a plain fibre white, neutral image
+    "MGIV FB":     dict(base=(0.0, 0.8), image=(0.0, 0.0)),
+    # "a warm black image tone on a warm white base"
+    "FB Warmtone": dict(base=(0.5, 4.0), image=(1.5, 7.0)),
+}
 
-def tone_xyz(Y, tone):
-    """Paper image tone as a small chromaticity offset from D65.
+def tone_xyz(Y, paper, Dp):
+    """Print colour from its lightness and the paper's density.
 
-    Ilford describes warm and cool papers in words, not numbers, so the shift
-    is a modest documented stand-in, strongest in the mid-tones where image
-    silver dominates and vanishing at paper white."""
-    dx, dy = TONE_XY[tone]
-    w = 4.0 * np.clip(Y, 0, 1) * (1.0 - np.clip(Y, 0, 1))      # peaks at mid grey
-    x0, y0 = 0.3127, 0.3290
-    xx = x0 + dx * w; yy = y0 + dy * w
-    X = Y * xx / yy; Z = Y * (1 - xx - yy) / yy
-    return np.stack([X, Y, Z], axis=-1)
+    The base tint shows where the paper is bare; as silver builds up the colour
+    turns to the image tone. The mix follows how much light the silver itself
+    absorbs (1 - 10^-(D - Dmin)): half way at D 0.3 above the base, 0.8 at a
+    printed mid-grey, all image tone in the blacks."""
+    t = TONE[paper]; dmin = float(paper_curve(paper, "2")[1][0])
+    s = 1.0 - 10.0 ** (-np.clip(np.asarray(Dp, float) - dmin, 0, None))
+    a = t["base"][0] * (1 - s) + t["image"][0] * s
+    b = t["base"][1] * (1 - s) + t["image"][1] * s
+    Y = np.clip(np.asarray(Y, float), 0, None)
+    fy = np.where(Y > 216 / 24389, np.cbrt(Y), (24389 / 27 * Y + 16) / 116)
+    fx = fy + a / 500.0; fz = fy - b / 200.0
+    inv = lambda f: np.where(f ** 3 > 216 / 24389, f ** 3, (116 * f - 16) / (24389 / 27))
+    W = M.D65W
+    return np.stack([inv(fx) * W[0], Y, inv(fz) * W[2]], axis=-1)
 
 # ---------------------------------------------------------------- full chain
 VIEW_FLARE = 0.003             # print surface reflection under viewing light
@@ -177,7 +194,7 @@ def render(film, xyz, paper="MGIV RC", grade="2", filt="none", view_flare=VIEW_F
     Dp = print_density(paper, grade, logE)
     Y = 10.0 ** (-Dp)
     Y = (Y + view_flare) / (1.0 + view_flare)
-    return tone_xyz(Y, PAPERS[paper]["tone"])
+    return tone_xyz(Y, paper, Dp)
 
 def _mid_offset(paper, grade):
     """Print exposure: the log exposure at which a metered mid-grey lands.
@@ -227,7 +244,7 @@ def print_from_value(v, paper="MGIV RC", grade="2", view_flare=VIEW_FLARE):
     u = (V_MID - np.asarray(v, float)) * NEG_SPAN
     Dp = print_density(paper, grade, u + _mid_offset(paper, grade))
     Y = (10.0 ** (-Dp) + view_flare) / (1.0 + view_flare)
-    return tone_xyz(Y, PAPERS[paper]["tone"])
+    return tone_xyz(Y, paper, Dp)
 
 # ids used in file names: maker letter + short name, like the colour films
 ALIAS = {"HP5 Plus": "IHP5", "FP4 Plus": "IFP4", "Delta 100": "ID100", "Delta 400": "ID400",

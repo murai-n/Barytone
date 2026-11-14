@@ -98,23 +98,25 @@ const ok = (label, cond, extra) => { (cond ? pass++ : fail++); console.log((cond
   for (let i = 0; i < buf.length - 4; i++) if (buf[i] === 0x50 && buf[i + 1] === 0x4b && buf[i + 2] === 3 && buf[i + 3] === 4) entries++;
   ok("zip holds 75 profiles and 75 styles", entries === 150, entries + " entries, " + buf.length + " bytes");
   ok("profiles are under NikonZ5-film-profiles/ICC (Nikon Z5)/", buf.includes(Buffer.from("NikonZ5-film-profiles/ICC (Nikon Z5)/NikonZ5-Film KP400 base.icm")));
-  ok("styles are under NikonZ5-film-profiles/1 Film (Nikon Z5)/", buf.includes(Buffer.from("NikonZ5-film-profiles/1 Film (Nikon Z5)/Film KP400 (Nikon Z5).costyle")));
+  ok("styles are under NikonZ5-film-profiles/1 Film (Nikon Z5)/Negative/", buf.includes(Buffer.from("NikonZ5-film-profiles/1 Film (Nikon Z5)/Negative/Film KP400 (Nikon Z5).costyle")));
   {
     const { execSync } = require("child_process");
     execSync(`rm -rf "${T}/unz" && mkdir -p "${T}/unz" && cd "${T}/unz" && unzip -q ../out.zip`);
-    const sty = fs.readFileSync(T + "/unz/NikonZ5-film-profiles/1 Film (Nikon Z5)/Film KP400 (Nikon Z5).costyle", "utf8");
+    const sty = fs.readFileSync(T + "/unz/NikonZ5-film-profiles/1 Film (Nikon Z5)/Negative/Film KP400 (Nikon Z5).costyle", "utf8");
     ok("style points at the matching ICC", sty.includes('K="ICCProfile" V="NikonZ5-Film KP400 base.icm"'));
     ok("style sets the camera's linear curve", sty.includes('K="FilmCurve" V="NikonZ5-Linear Response.fcrv"'));
     ok("style carries the develop layer", sty.includes('K="Name" V="Develop KP400 - color"') && sty.includes("<LDS>"));
-    { const pos = fs.readFileSync(T + "/unz/NikonZ5-film-profiles/1 Film (Nikon Z5)/Film FV50 (Nikon Z5).costyle", "utf8"); ok("positive styles carry the slide tone layer", pos.includes("Develop FV50 - slide tone") && (pos.match(/<LD>/g)||[]).length === 2); ok("negative styles stay single-layer", (sty.match(/<LD>/g)||[]).length === 1); }
-    { const dir = T + "/unz/NikonZ5-film-profiles/1 Film (Nikon Z5)/", ms = fs.readFileSync(dir + "Film IHP5 R (Nikon Z5).costyle", "utf8"), mb = fs.readFileSync(dir + "Film IHP5 (Nikon Z5).costyle", "utf8");
+    { const pos = fs.readFileSync(T + "/unz/NikonZ5-film-profiles/1 Film (Nikon Z5)/Positive/Film FV50 (Nikon Z5).costyle", "utf8"); ok("positive styles carry the slide tone layer", pos.includes("Develop FV50 - slide tone") && (pos.match(/<LD>/g)||[]).length === 2); ok("negative styles stay single-layer", (sty.match(/<LD>/g)||[]).length === 1); }
+    { const dir = T + "/unz/NikonZ5-film-profiles/1 Film (Nikon Z5)/B&W/", ms = fs.readFileSync(dir + "Film IHP5 R (Nikon Z5).costyle", "utf8"), mb = fs.readFileSync(dir + "Film IHP5 (Nikon Z5).costyle", "utf8");
       ok("mono: one style per filter, pointing at its ICC", ms.includes('K="ICCProfile" V="NikonZ5-Film IHP5 R.icm"') && mb.includes('K="ICCProfile" V="NikonZ5-Film IHP5 base.icm"'));
       ok("mono styles carry no develop layer", !ms.includes("<LDS>") && ms.includes('K="FilmCurve" V="NikonZ5-Linear Response.fcrv"'));
       ok("mono ICC is in the ICC folder", fs.existsSync(T + "/unz/NikonZ5-film-profiles/ICC (Nikon Z5)/NikonZ5-Film KTX400 G.icm")); }
     ok("style has a real uuid", /K="UUID" V="[0-9A-F]{8}-[0-9A-F]{4}-4[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}"/.test(sty));
-    const n = fs.readdirSync(T + "/unz/NikonZ5-film-profiles/ICC (Nikon Z5)").length, m = fs.readdirSync(T + "/unz/NikonZ5-film-profiles/1 Film (Nikon Z5)").length;
+    const FD = T + "/unz/NikonZ5-film-profiles/1 Film (Nikon Z5)/", kinds = fs.readdirSync(FD).sort(), styles = [].concat(...kinds.map(k => fs.readdirSync(FD + k).map(f => FD + k + "/" + f)));
+    ok("Film folder splits into Negative / Positive / B&W", JSON.stringify(kinds) === '["B&W","Negative","Positive"]' && JSON.stringify(kinds.map(k => fs.readdirSync(FD + k).length)) === "[45,18,12]", JSON.stringify(kinds.map(k => [k, fs.readdirSync(FD + k).length])));
+    const n = fs.readdirSync(T + "/unz/NikonZ5-film-profiles/ICC (Nikon Z5)").length, m = styles.length;
     ok("both folders unzip cleanly", n === 75 && m === 75, n + " icc, " + m + " styles");
-    const uuids = new Set(fs.readdirSync(T + "/unz/NikonZ5-film-profiles/1 Film (Nikon Z5)").map(f => /V="([0-9A-F-]{36})"/.exec(fs.readFileSync(T + "/unz/NikonZ5-film-profiles/1 Film (Nikon Z5)/" + f, "utf8").match(/UUID[^/]*/)[0])[1]));
+    const uuids = new Set(styles.map(f => /V="([0-9A-F-]{36})"/.exec(fs.readFileSync(f, "utf8").match(/UUID[^/]*/)[0])[1]));
     ok("every style has its own uuid", uuids.size === 75, uuids.size + " unique");
   }
   await page.waitForSelector("#done-banner:not([hidden])", { timeout: 10000 });
@@ -164,9 +166,10 @@ const ok = (label, cond, extra) => { (cond ? pass++ : fail++); console.log((cond
     execSync(`rm -rf "${T}/unz2" && mkdir -p "${T}/unz2" && cd "${T}/unz2" && unzip -q ../out2.zip`);
     const top = fs.readdirSync(T + "/unz2/film-profiles").sort();
     ok("one folder pair per camera", JSON.stringify(top) === JSON.stringify(["1 Film (Nikon Z5)", "1 Film (Sony ILCE-7M4)", "ICC (Nikon Z5)", "ICC (Sony ILCE-7M4)"]), JSON.stringify(top));
-    const counts = top.map(d => fs.readdirSync(T + "/unz2/film-profiles/" + d).length);
+    const cnt = d => fs.readdirSync(d, { withFileTypes: true }).reduce((n, e) => n + (e.isDirectory() ? cnt(d + "/" + e.name) : 1), 0);
+    const counts = top.map(d => cnt(T + "/unz2/film-profiles/" + d));
     ok("75 files in each", counts.every(c => c === 75), JSON.stringify(counts));
-    const sony = fs.readFileSync(T + "/unz2/film-profiles/1 Film (Sony ILCE-7M4)/Film KP400 (Sony ILCE-7M4).costyle", "utf8");
+    const sony = fs.readFileSync(T + "/unz2/film-profiles/1 Film (Sony ILCE-7M4)/Negative/Film KP400 (Sony ILCE-7M4).costyle", "utf8");
     ok("each camera's styles point at its own ICC and curve", sony.includes('V="SonyILCE-7M4-Film KP400 base.icm"') && sony.includes('V="SonyILCE-7M4-Linear Response.fcrv"'));
     const a = fs.readFileSync(T + "/unz2/film-profiles/ICC (Nikon Z5)/NikonZ5-Film KP400 base.icm"), b = fs.readFileSync(T + "/unz2/film-profiles/ICC (Sony ILCE-7M4)/SonyILCE-7M4-Film KP400 base.icm");
     ok("each camera's ICC carries its own name", a.includes(Buffer.from("NikonZ5-Film KP400 base")) && b.includes(Buffer.from("SonyILCE-7M4-Film KP400 base")));

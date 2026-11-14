@@ -33,6 +33,9 @@
   function zipName() { return state.picks.length > 1 ? "film-profiles-" + state.picks.length + "-cameras.zip" : camName(state.picks[0]) + "-film-profiles.zip"; }
   function iccDir(p) { return "ICC (" + camDisplay(p) + ")"; }
   function filmDir(p) { return "1 Film (" + camDisplay(p) + ")"; }
+  /* inside the Film folder: one subfolder per kind, so the style list groups them */
+  var KIND_DIR = { neg: "Negative", pos: "Positive", mono: "B&W" };
+  function kindDir(j) { return KIND_DIR[j.film.kind] || "Other"; }
   function styleName(p, j) {
     var f = j.film.kind === "mono" && j.variant.id !== "base" ? " " + j.variant.id : "";   /* one style per contrast filter */
     return "Film " + j.film.id + f + " (" + camDisplay(p) + ")";
@@ -47,8 +50,8 @@
     if (film.kind !== "mono") return o;
     var P = C.MONO.preview, M = C.M_RGB_to_XYZ, Y = o[0] * M[1][0] + o[1] * M[1][1] + o[2] * M[1][2];
     var n = P.v.length - 1, t = Math.min(Math.max(Math.pow(Math.max(Y, 0), 1 / C.MONO.ENC), 0), 1) * n;
-    var i = Math.min(Math.floor(t), n - 1), y = P.Y[i] + (t - i) * (P.Y[i + 1] - P.Y[i]);
-    return [y, y, y];
+    var i = Math.min(Math.floor(t), n - 1), f = t - i, A = P.rgb[i], B = P.rgb[i + 1];
+    return [A[0] + f * (B[0] - A[0]), A[1] + f * (B[1] - A[1]), A[2] + f * (B[2] - A[2])];
   }
   function drawPreview(canvas, film, variant) {
     var cols = 12, rows = 2, W = 1200, ph = 64, rampH = 36, gap = 4;
@@ -465,7 +468,7 @@
           var bytes = FB.bake(C, p.buf.slice(0), j.film, j.variant, name);
           files.push({ name: root + "/" + iccDir(p) + "/" + name + ".icm", data: bytes });
           var sty = FB.costyle(j.film, { icc: name + ".icm", filmCurve: filmCurveName(p), name: styleName(p, j) });
-          files.push({ name: root + "/" + filmDir(p) + "/" + styleName(p, j) + ".costyle", data: new TextEncoder().encode(sty) });
+          files.push({ name: root + "/" + filmDir(p) + "/" + kindDir(j) + "/" + styleName(p, j) + ".costyle", data: new TextEncoder().encode(sty) });
         } catch (err) {
           $("progress").hidden = true; $("status").textContent = ""; btn.disabled = false;
           showError("作成できませんでした", camDisplay(p) + "：" + (err && err.message ? err.message : String(err))); return;

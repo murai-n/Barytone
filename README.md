@@ -175,8 +175,12 @@ Y・O・R・G。
 - **FB Warmtone** — 曲線の枠検出が安定せず、同じバライタの MGIV FB の形状を
   自身の ISO Range と Dmax で再スケール
 - **コントラストフィルター** — 実測透過率が入手できないため、公称カットオンに基づく理想化モデル
-- **温黒調／冷黒調** — Ilford が色味を文章でしか示していないため、中間調で最大になる
-  控えめな色度オフセットとして実装
+- **紙の色（ベースと画像の色）** — Ilford は文章でしか示していない（Warmtone「warm black image
+  tone on a warm white base」、Cooltone「cool-of-neutral image tone on a cool white base」、
+  MGIV RC「bright base tint」「cool-to-neutral」）。紙の白にベースの色、銀の濃いところに画像の色を
+  CIELAB の a\*, b\* で与え、その間を銀の吸収（1 − 10^−(D − Dmin)）で混ぜる。値は文言に合わせた
+  代用値（`mono.TONE`）：Warmtone ベース b\* +4・黒 +7、Cooltone ベース −2.5・黒 −4、
+  MGIV RC ベース −1.5・黒 −1、MGIV FB ベース +0.8・黒 0
 - **Ektachrome EPN → E100 の色素**、**Velvia 100 → Velvia 50 の色素**を借用
 - **Ilfochrome** — プリント紙の特性曲線が非公開のため全体を近似
 

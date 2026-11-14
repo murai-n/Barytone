@@ -45,7 +45,8 @@ def entry(f):
 PREVIEW_PAPER, PREVIEW_GRADE = "MGIV RC", "2"
 _pv = np.linspace(0, 1, 257)
 PREVIEW = dict(paper=PREVIEW_PAPER, grade=PREVIEW_GRADE, label="MGIV RC 2号",
-               v=[float(x) for x in _pv], Y=[float(y) for y in mono.print_from_value(_pv, PREVIEW_PAPER, PREVIEW_GRADE)[:, 1]])
+               v=[float(x) for x in _pv],
+               rgb=np.clip(mono.print_from_value(_pv, PREVIEW_PAPER, PREVIEW_GRADE) @ S.M_XYZ_SRGB.T, 0, 1).tolist())   # linear sRGB, paper tint included
 
 def main():
     films = [entry(f) for f in ORDER]
