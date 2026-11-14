@@ -14,13 +14,55 @@ applied afterwards.
 """
 import json
 import numpy as np
-import model3 as M
+import os
+import spec3 as M          # scene side only; the colour films are not needed here
 
 WL = M.WL                      # 380..730 nm, 10 nm steps
 GRAY = M.GRAY
 
-FILMS = json.load(open("/home/claude/ds/mono_films.json"))
-PAPERS = json.load(open("/home/claude/ds/mono_papers.json"))
+FILMS = json.load(open(os.path.join(M.ROOT, "ds/mono_films.json")))
+PAPERS = json.load(open(os.path.join(M.ROOT, "ds/mono_papers.json")))
+
+def _isotonic(y):
+    """Least-squares non-decreasing fit (pool adjacent violators)."""
+    v = []; w = []
+    for t in np.asarray(y, float):
+        v.append(t); w.append(1.0)
+        while len(v) > 1 and v[-2] > v[-1]:
+            tot = w[-2] + w[-1]; v[-2] = (v[-2] * w[-2] + v[-1] * w[-1]) / tot; w[-2] = tot; v.pop(); w.pop()
+    return np.repeat(v, np.asarray(w, int))
+
+CURVE_STEP = 0.005             # log-exposure grid of a cleaned curve
+CURVE_SMOOTH = 0.03            # Gaussian sigma in log exposure: below the traces' line width
+
+def clean_curve(x0, d0):
+    """A traced D-logE curve, cleaned: even grid, isotonic fit, light smoothing.
+
+    Traces wobble and, on raster sheets, come in pixel-row steps. A running
+    maximum turns every dip and step into a flat run, which prints as a band of
+    one grey (MGIV RC had one at D 0.8, in the mid-tones). The isotonic fit is
+    the closest rising curve to the trace; smoothing a rising curve with a
+    positive kernel keeps it rising; a ramp of 1e-4 per logE keeps it strictly so."""
+    x0 = np.asarray(x0, float); d0 = np.asarray(d0, float)
+    x = np.arange(x0[0], x0[-1] + 1e-9, CURVE_STEP)
+    d = _isotonic(np.interp(x, x0, d0))
+    n = int(np.ceil(4 * CURVE_SMOOTH / CURVE_STEP))
+    k = np.exp(-0.5 * (np.arange(-n, n + 1) * CURVE_STEP / CURVE_SMOOTH) ** 2); k /= k.sum()
+    d = np.convolve(np.pad(d, n, mode="edge"), k, mode="valid")
+    return x, d + 1e-4 * (x - x[0])
+
+_SHAPES = {}
+def paper_shape(paper):
+    if paper not in _SHAPES:
+        sh = PAPERS[paper]["shape"]; _SHAPES[paper] = clean_curve(sh["x"], sh["d"])
+    return _SHAPES[paper]
+
+_CH = {}
+def film_curve(film):
+    """The film's characteristic curve, cleaned the same way as the papers."""
+    if film not in _CH:
+        c = FILMS[film]["ch"]; _CH[film] = clean_curve(c["x"], c["d"])
+    return _CH[film]
 
 # ---------------------------------------------------------------- filters
 def _edge(wl, cut, width, rising=True):
@@ -64,9 +106,8 @@ def exposure(film, xyz, filt="none"):
 
 def speed_point(film):
     """log exposure giving 0.1 above base density — the ISO speed criterion."""
-    c = FILMS[film]["ch"]
-    x = np.asarray(c["x"], float); d = np.asarray(c["d"], float)
-    return float(np.interp(min(d) + 0.10, d, x))
+    x, d = film_curve(film)
+    return float(np.interp(d[0] + 0.10, d, x))
 
 def neg_density(film, H):
     """Negative density for a relative exposure, placed at the box speed.
@@ -74,8 +115,7 @@ def neg_density(film, H):
     Ilford prints its curves against relative log exposure and Kodak against
     absolute, so both are anchored through the film's own speed point instead
     of the printed axis."""
-    c = FILMS[film]["ch"]
-    x = np.asarray(c["x"], float); d = np.asarray(c["d"], float)
+    x, d = film_curve(film)
     lo, hi = x[0], x[-1]
     # a metered mid-grey sits about 10x above the speed point on the curve
     pos = speed_point(film) + 1.0 + np.log10(np.asarray(H, float) / GRAY)
@@ -91,15 +131,16 @@ def paper_curve(paper, grade):
     p = PAPERS[paper]
     i = p["grades"].index(grade)
     R = p["iso_range"][i] / 100.0
-    x = np.asarray(p["shape"]["x"], float); d = np.asarray(p["shape"]["d"], float)
+    x, d = paper_shape(paper)
     dmin, dmax = float(d.min()), float(d.max())
     # ISO 6846 measures the range between these two densities
     lo = float(np.interp(dmin + 0.04, d, x))
     hi = float(np.interp(dmax - 0.10, d, x))
     span = max(hi - lo, 1e-6)
     xs = (x - lo) / span * R                 # 0 at the toe point, R at the shoulder
-    d = np.maximum.accumulate(d)             # the traced line wobbles; density only rises
     return xs, d
+
+
 
 def print_density(paper, grade, logE):
     xs, d = paper_curve(paper, grade)
@@ -143,3 +184,45 @@ def _mid_offset(paper, grade):
     ends inside the paper rather than blocking up or blowing out."""
     i = PAPERS[paper]["grades"].index(grade)
     return PAPERS[paper]["iso_range"][i] / 100.0 / 2.0
+
+# ---------------------------------------------------------------- ICC / style split
+# The kit splits the chain where the darkroom does: the ICC is the negative
+# (film + filter), a style is the print (paper + grade). The ICC writes the
+# negative's density relative to mid-grey into the value Capture One's curves
+# work on (linear light ** 1/ENC), so a paper-grade style is an ordinary curve
+# of that value and every paper works on every film.
+ENC = 1.8                      # Capture One curve domain, as in styles.py
+NEG_SPAN = 2.4                 # density across the whole curve domain 0..1
+V_MID = GRAY ** (1.0 / ENC)    # mid-grey keeps its place (L* 50)
+FILTER_LABEL = {"none": "フィルターなし", "yellow": "黄（Y2 相当）", "orange": "橙（O2 相当）",
+                "red": "赤（R2 相当）", "green": "緑（G 相当）"}
+
+def neg_rel(film, xyz, filt="none"):
+    """Negative density relative to the density of a metered mid-grey.
+    Positive = thinner than mid-grey (a shadow)."""
+    H = exposure(film, xyz, filt)
+    ref = float(np.ravel(neg_density(film, np.array([GRAY])))[0])
+    return ref - neg_density(film, H)
+
+def icc_value(u):
+    """Relative negative density -> curve-domain value written by the ICC."""
+    return np.clip(V_MID - np.asarray(u, float) / NEG_SPAN, 0.0, 1.0)
+
+def icc_xyz(film, xyz, filt="none"):
+    """Scene XYZ (D65) -> what the film ICC hands to Capture One: a neutral grey."""
+    Y = icc_value(neg_rel(film, xyz, filt)) ** ENC
+    return np.asarray(Y, float)[..., None] * M.D65W
+
+def print_from_value(v, paper="MGIV RC", grade="2", view_flare=0.003):
+    """The paper-grade style's job: ICC value -> print XYZ. Inverts icc_value
+    exactly, so icc_xyz followed by this equals render()."""
+    u = (V_MID - np.asarray(v, float)) * NEG_SPAN
+    Dp = print_density(paper, grade, u + _mid_offset(paper, grade))
+    Y = (10.0 ** (-Dp) + view_flare) / (1.0 + view_flare)
+    return tone_xyz(Y, PAPERS[paper]["tone"])
+
+# ids used in file names: maker letter + short name, like the colour films
+ALIAS = {"HP5 Plus": "IHP5", "FP4 Plus": "IFP4", "Delta 100": "ID100", "Delta 400": "ID400",
+         "Pan F Plus": "IPANF", "SFX 200": "ISFX200", "T-Max 100": "KTM100", "T-Max 400": "KTM400",
+         "Tri-X 400": "KTX400"}
+FILTER_ID = {"none": "base", "yellow": "Y", "orange": "O", "red": "R", "green": "G"}

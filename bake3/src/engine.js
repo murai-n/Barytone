@@ -207,7 +207,23 @@
     var fb = v.bpaper ? baseRender(C, film, film.variants[0], xyz) : xyz;
     return [w * o[0] * s + (1 - w) * fb[0], w * o[1] * s + (1 - w) * fb[1], w * o[2] * s + (1 - w) * fb[2]];
   }
+  /* Black and white: the ICC is the negative only (film + contrast filter).
+     The filter is already inside v.mk, so it acts on the spectrum before the
+     emulsion integrates it.  The negative's density relative to mid-grey is
+     written linearly into Capture One's curve domain (linear ** 1/ENC); paper
+     and grade are a curve style on top.  Output is neutral (a = b = 0). */
+  function monoRender(C, film, v, xyz) {
+    var S = spectrum(C, xyz), k = v.mk, H = 0, P = C.MONO;
+    for (var i = 0; i < S.length; i++) H += S[i] * k[i];
+    H = Math.max(H, 1e-7);
+    var xs = film.x, lo = xs[0], hi = xs[xs.length - 1];
+    var pos = Math.min(Math.max(film.sp + 1 + Math.log10(H / C.GRAY), lo), hi);
+    var u = film.ref - interp(pos, xs, film.d);
+    var val = Math.min(Math.max(P.V_MID - u / P.NEG_SPAN, 0), 1), Y = Math.pow(val, P.ENC), w = C.D65W;
+    return [Y * w[0], Y * w[1], Y * w[2]];
+  }
   function renderXYZ(C, film, v, xyz) {
+    if (film.kind === "mono") return monoRender(C, film, v, xyz);
     if (v.base) return baseRender(C, film, v, xyz);
     var H = exposures(film, spectrum(C, xyz));
     if (v.paper) return viewAdapt(C, printRender(C, film, v, H), "print");
@@ -297,6 +313,7 @@
         var L = applyOut(0, dv.getUint16(p)) / 65280 * 100, a = applyOut(1, dv.getUint16(p + 2)) / 256 - 128, bb = applyOut(2, dv.getUint16(p + 4)) / 256 - 128;
         var X65 = mul3(P.a50to65, labToXYZ50(L, a, bb));
         var lab = xyz50ToLab(mul3(P.a65to50, renderXYZ(C, film, variant, X65)));
+        if (film.kind === "mono") { lab[1] = 0; lab[2] = 0; }
         var e0 = Math.round(lab[0] / 100 * 65280), e1 = Math.round((lab[1] + 128) * 256), e2 = Math.round((lab[2] + 128) * 256);
         dv.setUint16(p, Math.min(Math.max(e0, 0), 65535)); dv.setUint16(p + 2, Math.min(Math.max(e1, 0), 65535)); dv.setUint16(p + 4, Math.min(Math.max(e2, 0), 65535));
         nodesDone++;
@@ -341,6 +358,14 @@
     return h.slice(0, 4).join("") + "-" + h.slice(4, 6).join("") + "-" + h.slice(6, 8).join("") + "-" + h.slice(8, 10).join("") + "-" + h.slice(10, 16).join("");
   }
   function costyle(film, opts) {
+    /* black and white: the ICC alone is the film; paper and grade are separate styles */
+    if (film.kind === "mono") return ['<?xml version="1.0"?>', '<SL Engine="1300">',
+      '\t<E K="FilmCurve" V="' + xmlEsc(opts.filmCurve) + '" />',
+      '\t<E K="ICCProfile" V="' + xmlEsc(opts.icc) + '" />',
+      '\t<E K="Name" V="' + xmlEsc(opts.name) + '" />',
+      '\t<E K="StyleSource" V="Styles" />',
+      '\t<E K="UUID" V="' + uuid4() + '" />',
+      "</SL>", ""].join("\n");
     var d = film.dev;
     if (!d) throw new BakeError("no_curves", "このフィルムにはスタイル用のカーブがありません。");
     var layer = ["\t\t<LD>", "\t\t\t<LA>",

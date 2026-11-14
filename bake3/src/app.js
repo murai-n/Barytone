@@ -29,7 +29,10 @@
   function rootDir() { return camName() + "-film-profiles"; }
   function iccDir() { return "ICC (" + camDisplay() + ")"; }
   function filmDir() { return "1 Film (" + camDisplay() + ")"; }
-  function styleName(j) { return "Film " + j.film.id + " (" + camDisplay() + ")"; }
+  function styleName(j) {
+    var f = j.film.kind === "mono" && j.variant.id !== "base" ? " " + j.variant.id : "";   /* one style per contrast filter */
+    return "Film " + j.film.id + f + " (" + camDisplay() + ")";
+  }
   function filmCurveName() { return camName() + "-Linear Response.fcrv"; }
 
   /* ---------- preview ---------- */
@@ -68,7 +71,10 @@
     previewsDrawn = true;
     var box = $("previews");
     box.appendChild(figure("元の色", "フィルムを通す前", null, null));
-    JOBS.forEach(function (j) { box.appendChild(figure(j.film.name, j.film.desc + "（" + j.film.iso + "）", j.film, j.variant)); });
+    JOBS.forEach(function (j) {
+      var title = j.film.kind === "mono" ? j.film.name + " " + j.variant.label : j.film.name;
+      box.appendChild(figure(title, j.film.desc + "（" + j.film.iso + "）", j.film, j.variant));
+    });
   }
   function refresh() {
     var ready = !!state.buf;
