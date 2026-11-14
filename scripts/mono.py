@@ -95,11 +95,19 @@ def paper_shape(paper):
         _SHAPES[paper] = clean_curve(x[keep], d[keep])
     return _SHAPES[paper]
 
+# Stretches of a traced film curve that are not the curve. FP4 Plus: past the
+# end of its shoulder (D 1.87, x 4.14) the trace runs along the "2.0" tick of
+# the density scale, which read as a jump to D 2.0 six stops over grey.
+FILM_STRAY_X = {"FP4 Plus": [(4.15, 9.0)]}
+
 _CH = {}
 def film_curve(film):
     """The film's characteristic curve, cleaned the same way as the papers."""
     if film not in _CH:
-        c = FILMS[film]["ch"]; _CH[film] = clean_curve(c["x"], c["d"])
+        c = FILMS[film]["ch"]; x = np.asarray(c["x"], float); d = np.asarray(c["d"], float)
+        keep = np.ones(len(x), bool)
+        for lo, hi in FILM_STRAY_X.get(film, []): keep &= ~((x >= lo) & (x <= hi))
+        _CH[film] = clean_curve(x[keep], d[keep])
     return _CH[film]
 
 # ---------------------------------------------------------------- filters
