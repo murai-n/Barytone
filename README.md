@@ -32,7 +32,7 @@ Kodachrome 25/64/200、Ektachrome 64T/160T、Fujichrome 64T Type II。
 
 印画紙は 8 種（Endura、Crystal Archive ほか）＋近似 Ilfochrome。
 
-### モノクロ：ICC・印画紙スタイル・ツール組み込みまで完成、公開とキット化は未着手
+### モノクロ：キット再パッケージ以外は完成
 
 - フィルム 9 本（分光感度＋特性曲線）→ `ds/mono_films.json`
 - 印画紙 4 種（代表カーブ＋号数別 ISO Range / Speed）→ `ds/mono_papers.json`
@@ -52,7 +52,7 @@ Kodachrome 25/64/200、Ektachrome 64T/160T、Fujichrome 64T Type II。
    プリント露光は中間グレー L\* 50 基準（下の「プリント露光の基準」）。
 3. **ツール再ビルド** — ビルドとブラウザテストまで完了（52 件すべて合格）。焼くのは 75 本
    （カラー 30 ＋ モノクロ 45）。モノクロの見本は MGIV RC 2 号で焼いた状態を表示し、使い方の欄に
-   印画紙スタイルを重ねる手順を足した。**アーティファクトの再公開は未実施。**
+   印画紙スタイルを重ねる手順を足した。アーティファクトは再公開済み（Version 35）。
    テストの実行：
 
        python3 bake3/make_fixture.py /tmp/co_test       # 試験用カメラプロファイル 12 個
@@ -62,8 +62,12 @@ Kodachrome 25/64/200、Ektachrome 64T/160T、Fujichrome 64T Type II。
    デザインシステムは `digital-go-jp/design-system-example-components-html` を
    `/home/claude/bake/dads/html` に clone し、`npm pack @digital-go-jp/design-tokens`
    を展開した `package/` を `/home/claude/bake/dads/pkg/package` に置く。
-4. **ドキュメント更新** — 下の「データ代用」を技術資料に明記。
-5. **キット再パッケージ**。
+4. ~~**ドキュメント更新**~~ — 完了。技術資料に「モノクロ」の章を追加し、「データの代用・借用」に
+   モノクロ 5 項目（T-Max 400、FB Warmtone、フィルター、温黒・冷黒、曲線の整形）を追記。
+   マニュアル（利用者向け）は未更新。
+5. **キット再パッケージ** — 未着手。`presets.py` が最後に `styles_mono.py` を呼ぶので、
+   カラー側のパイプライン（`work/` のデータと Nikon Z5 のプロファイルが要る）を動かせる
+   環境でいつもどおり作れば、`3 Paper (B&W)` の 28 本が入る。
 
 ---
 
