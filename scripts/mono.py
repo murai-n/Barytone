@@ -34,6 +34,20 @@ def _isotonic(y):
 
 CURVE_STEP = 0.005             # log-exposure grid of a cleaned curve
 CURVE_SMOOTH = 0.03            # Gaussian sigma in log exposure: below the traces' line width
+STRAY = 0.02                   # density off the curve beyond which a traced point is not the curve
+
+def _longest_rising(d, tol):
+    """Indices of the longest subsequence where each point is at least the one
+    before it minus tol (a longest-increasing-subsequence with slack)."""
+    n = len(d); best = np.ones(n, int); prev = -np.ones(n, int)
+    for j in range(1, n):
+        ok = np.nonzero(d[:j] <= d[j] + tol)[0]
+        if len(ok):
+            i = ok[np.argmax(best[ok])]
+            if best[i] + 1 > best[j]: best[j] = best[i] + 1; prev[j] = i
+    j = int(np.argmax(best)); out = []
+    while j >= 0: out.append(j); j = prev[j]
+    return np.array(out[::-1])
 
 def clean_curve(x0, d0):
     """A traced D-logE curve, cleaned: even grid, isotonic fit, light smoothing.
@@ -44,6 +58,12 @@ def clean_curve(x0, d0):
     the closest rising curve to the trace; smoothing a rising curve with a
     positive kernel keeps it rising; a ramp of 1e-4 per logE keeps it strictly so."""
     x0 = np.asarray(x0, float); d0 = np.asarray(d0, float)
+    # stray ink: a label or a frame line picked up instead of the curve sits off
+    # the curve by more than the trace's own wobble. Keep the longest run of
+    # points that rises within that wobble; the rest is not the curve.
+    # (RC Cooltone had a label in its toe, MGIV RC a mark on its shoulder.)
+    keep = _longest_rising(d0, STRAY)
+    x0, d0 = x0[keep], d0[keep]
     x = np.arange(x0[0], x0[-1] + 1e-9, CURVE_STEP)
     d = _isotonic(np.interp(x, x0, d0))
     n = int(np.ceil(4 * CURVE_SMOOTH / CURVE_STEP))
@@ -51,10 +71,28 @@ def clean_curve(x0, d0):
     d = np.convolve(np.pad(d, n, mode="edge"), k, mode="valid")
     return x, d + 1e-4 * (x - x[0])
 
+# Stretches of a traced paper curve that are not the curve, by log exposure on
+# the trace's own axis. RC Cooltone's single-curve chart has a frame edge at
+# its start and a label sitting across the toe (D 0.15), with the curve itself
+# hidden behind the label up to D 1.0; left in, the label reads as a flat step
+# that eats part of the ISO range and makes every grade far too hard.
+STRAY_X = {"RC Cooltone": [(2.0, 2.225), (2.44, 2.62)]}
+# MGIV FB's sheet draws its single curve broken (only verticals survive in the
+# PDF), so its trace came off the six-grade family chart and stitches parts of
+# different grades together: too hard at grade 00, shadows that never sink.
+# The fibre papers take the curve shape of MGIV RC (same Multigrade IV
+# emulsion) and keep their own ISO ranges per grade.
+SHAPE_FROM = {"MGIV FB": "MGIV RC", "FB Warmtone": "MGIV RC"}
+
 _SHAPES = {}
 def paper_shape(paper):
     if paper not in _SHAPES:
-        sh = PAPERS[paper]["shape"]; _SHAPES[paper] = clean_curve(sh["x"], sh["d"])
+        src = SHAPE_FROM.get(paper, paper)
+        if src != paper: _SHAPES[paper] = paper_shape(src); return _SHAPES[paper]
+        sh = PAPERS[paper]["shape"]; x = np.asarray(sh["x"], float); d = np.asarray(sh["d"], float)
+        keep = np.ones(len(x), bool)
+        for lo, hi in STRAY_X.get(paper, []): keep &= ~((x >= lo) & (x <= hi))
+        _SHAPES[paper] = clean_curve(x[keep], d[keep])
     return _SHAPES[paper]
 
 _CH = {}
