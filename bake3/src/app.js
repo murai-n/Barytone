@@ -36,12 +36,22 @@
   function filmCurveName() { return camName() + "-Linear Response.fcrv"; }
 
   /* ---------- preview ---------- */
+  /* a mono ICC holds the negative; the preview shows it printed on the preview paper */
+  function look(film, variant, lin) {
+    if (!film) return lin;
+    var o = FB.filmLinear(C, film, variant, lin);
+    if (film.kind !== "mono") return o;
+    var P = C.MONO.preview, M = C.M_RGB_to_XYZ, Y = o[0] * M[1][0] + o[1] * M[1][1] + o[2] * M[1][2];
+    var n = P.v.length - 1, t = Math.min(Math.max(Math.pow(Math.max(Y, 0), 1 / C.MONO.ENC), 0), 1) * n;
+    var i = Math.min(Math.floor(t), n - 1), y = P.Y[i] + (t - i) * (P.Y[i + 1] - P.Y[i]);
+    return [y, y, y];
+  }
   function drawPreview(canvas, film, variant) {
     var cols = 12, rows = 2, W = 1200, ph = 64, rampH = 36, gap = 4;
     canvas.width = W; canvas.height = rows * ph + gap + rampH;
     var ctx = canvas.getContext("2d"), pw = W / cols;
     C.checker.forEach(function (lin, i) {
-      var o = film ? FB.filmLinear(C, film, variant, lin) : lin;
+      var o = look(film, variant, lin);
       var r = Math.round(oetf(o[0]) * 255), g = Math.round(oetf(o[1]) * 255), b = Math.round(oetf(o[2]) * 255);
       ctx.fillStyle = "rgb(" + r + "," + g + "," + b + ")";
       var col = i % 6 + (i >= 12 ? 6 : 0), row = Math.floor(i / 6) % 2;
@@ -49,7 +59,7 @@
     });
     var img = ctx.createImageData(W, rampH);
     for (var x = 0; x < W; x++) {
-      var v = eotf(x / (W - 1)), o = film ? FB.filmLinear(C, film, variant, [v, v, v]) : [v, v, v];
+      var v = eotf(x / (W - 1)), o = look(film, variant, [v, v, v]);
       for (var y = 0; y < rampH; y++) { var p = (y * W + x) * 4; img.data[p] = oetf(o[0]) * 255; img.data[p + 1] = oetf(o[1]) * 255; img.data[p + 2] = oetf(o[2]) * 255; img.data[p + 3] = 255; }
     }
     ctx.putImageData(img, 0, rows * ph + gap);
@@ -73,7 +83,8 @@
     box.appendChild(figure("元の色", "フィルムを通す前", null, null));
     JOBS.forEach(function (j) {
       var title = j.film.kind === "mono" ? j.film.name + " " + j.variant.label : j.film.name;
-      box.appendChild(figure(title, j.film.desc + "（" + j.film.iso + "）", j.film, j.variant));
+      var sub = j.film.desc + "（" + j.film.iso + (j.film.kind === "mono" ? "、" + C.MONO.preview.label + "で焼いた見本" : "") + "）";
+      box.appendChild(figure(title, sub, j.film, j.variant));
     });
   }
   function refresh() {

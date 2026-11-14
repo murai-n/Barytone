@@ -32,7 +32,7 @@ Kodachrome 25/64/200、Ektachrome 64T/160T、Fujichrome 64T Type II。
 
 印画紙は 8 種（Endura、Crystal Archive ほか）＋近似 Ilfochrome。
 
-### モノクロ：ICC まで完成、スタイルとツール統合は未着手
+### モノクロ：ICC・印画紙スタイル・ツール組み込みまで完成、公開とキット化は未着手
 
 - フィルム 9 本（分光感度＋特性曲線）→ `ds/mono_films.json`
 - 印画紙 4 種（代表カーブ＋号数別 ISO Range / Speed）→ `ds/mono_papers.json`
@@ -45,12 +45,23 @@ Kodachrome 25/64/200、Ektachrome 64T/160T、Fujichrome 64T Type II。
 残作業はこの順：
 
 1. ~~**ICC 生成**~~ — 完了（下の「ICC と印画紙スタイルの分担」）。
-2. **スタイル生成** — 印画紙 4 種 × 号数 00〜5（7 段）を `styles.py` / `presets.py` に追加。
-3. **ツール再ビルド** — `bake3/build.py` → `t_browser.js` のアサーション更新 → アーティファクト再公開。
-   `films.json` はすでに 39 本（カラー 30 ＋ モノクロ 9）で、焼くのは 75 本になる。
-   `t_browser.js` の 31 / 30 / 60 という件数は 76 / 75 / 150 に直す必要がある。
-   見本の表示はモノクロ ICC 単体（下記のとおり平坦なネガ像）なので、既定の印画紙を
-   重ねて見せるかどうかもここで決める。
+2. ~~**スタイル生成**~~ — 完了。`scripts/styles_mono.py` が印画紙 4 種 × 号数 00〜5 の 28 本を
+   `3 Paper (B&W)` に書く（`presets.py` の最後から呼ぶ）。名前は `Paper IMR grade 2` の形で、
+   IMR = MGIV RC、ICT = RC Cooltone、IMF = MGIV FB、IFW = FB Warmtone。
+   ICC ＋スタイルと `mono.render()` の差は 9 フィルム × 300 色で最大 ΔE76 1.08。
+   **未決：プリント露光の基準**（下の「未決事項」）。
+3. **ツール再ビルド** — ビルドとブラウザテストまで完了（52 件すべて合格）。焼くのは 75 本
+   （カラー 30 ＋ モノクロ 45）。モノクロの見本は MGIV RC 2 号で焼いた状態を表示し、使い方の欄に
+   印画紙スタイルを重ねる手順を足した。**アーティファクトの再公開は未実施。**
+   テストの実行：
+
+       python3 bake3/make_fixture.py /tmp/co_test       # 試験用カメラプロファイル 12 個
+       python3 bake3/build.py                            # /home/claude/bake/dads にデザインシステムが要る
+       CO_TEST=/tmp/co_test node bake3/t_browser.js
+
+   デザインシステムは `digital-go-jp/design-system-example-components-html` を
+   `/home/claude/bake/dads/html` に clone し、`npm pack @digital-go-jp/design-tokens`
+   を展開した `package/` を `/home/claude/bake/dads/pkg/package` に置く。
 4. **ドキュメント更新** — 下の「データ代用」を技術資料に明記。
 5. **キット再パッケージ**。
 
@@ -107,6 +118,22 @@ ICC の中が物理的に正しい位置になる。
 
 赤で空が最も暗く・レンガが最も明るい、緑で葉が最も明るい。教科書どおり。
 
+### 未決事項：プリント露光の基準
+
+`mono._mid_offset()` は、ネガの濃度域を号数の ISO レンジ中央に合わせる。この結果、
+グレーカードは 4 紙とも L\* 28〜37 で刷られる（MGIV RC 2 号で sRGB 87）。中間グレーを
+L\* 50 に合わせる案と比べると次のとおり（HP5 Plus、L\*。グレー／白 90%／白／白 +1 段）。
+
+| | いまの設計 | グレーを L\* 50 に |
+|---|---|---|
+| MGIV RC 00 号 | 37 / 69 / 71 / 87 | 50 / 89 / 90 / 94 |
+| MGIV RC 2 号 | 37 / 91 / 92 / 94 | 50 / 94 / 94 / 96 |
+| MGIV FB 2 号 | 33 / 90 / 93 / 96 | 50 / 96 / 96 / 97 |
+
+いまの設計は中間調が約 1 段暗く、軟調の号数では白が濁る。L\* 50 案はハイライトが紙の白の
+手前に詰まる（ただし紙の白 97 には届かない）。ICC はこの選択と無関係で、変わるのは
+`print_from_value()` を通る印画紙スタイルと見本だけ。
+
 ### ICC と印画紙スタイルの分担
 
 暗室と同じところで切る。**ICC がネガ（フィルム＋フィルター）、スタイルがプリント
@@ -157,7 +184,7 @@ Y・O・R・G。
 
 | パス | 中身 |
 |---|---|
-| `scripts/` | モデルと生成パイプライン（`model3.py`、`styles.py`、`presets.py`、`export4.py`、`build3.py`、`mono.py`、`spec3.py`、`export_mono.py`、`check_mono_icc.py`、`test_profile.py`） |
+| `scripts/` | モデルと生成パイプライン（`model3.py`、`styles.py`、`presets.py`、`export4.py`、`build3.py`、`mono.py`、`spec3.py`、`export_mono.py`、`check_mono_icc.py`、`test_profile.py`、`styles_mono.py`） |
 | `ds/` | digitize 済みデータと抽出スクリプト |
 | `m3/` | 色素・分光の基礎データ |
 | `paper/` | 印画紙データ |

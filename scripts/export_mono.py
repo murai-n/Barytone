@@ -40,12 +40,19 @@ def entry(f):
                 sp=mono.speed_point(f), ref=float(np.ravel(mono.neg_density(f, np.array([mono.GRAY])))[0]),
                 variants=variants)
 
+# The tool's previews show a mono film printed, not the flat negative the ICC
+# holds: ICC value -> print Y on this paper and grade (a neutral paper).
+PREVIEW_PAPER, PREVIEW_GRADE = "MGIV RC", "2"
+_pv = np.linspace(0, 1, 257)
+PREVIEW = dict(paper=PREVIEW_PAPER, grade=PREVIEW_GRADE, label="MGIV RC 2号",
+               v=[float(x) for x in _pv], Y=[float(y) for y in mono.print_from_value(_pv, PREVIEW_PAPER, PREVIEW_GRADE)[:, 1]])
+
 def main():
     films = [entry(f) for f in ORDER]
     for t in TARGETS:
         d = json.load(open(t))
         d["films"] = [e for e in d["films"] if e.get("kind") != "mono"] + films
-        d["MONO"] = dict(ENC=mono.ENC, NEG_SPAN=mono.NEG_SPAN, V_MID=mono.V_MID)
+        d["MONO"] = dict(ENC=mono.ENC, NEG_SPAN=mono.NEG_SPAN, V_MID=mono.V_MID, preview=PREVIEW)
         json.dump(d, open(t, "w"))
     # reference renderings for the JS engine test
     rng = np.random.default_rng(7)
