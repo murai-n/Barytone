@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<SL Engine="1300">
+	<E K="Name" V="Coupler +50" />
+	<E K="StyleSource" V="Styles" />
+	<E K="UUID" V="5E59F1EE-06D0-4780-817D-C869AFA0E4C0" />
+</SL>
+<LDS>
+		<LD>
+			<LA>
+			<E K="Enabled" V="1" />
+			<E K="Name" V="Coupler +50" />
+			<E K="Opacity" V="100" />
+			<E K="Saturation" V="50" />
+			</LA>
+			<MD>
+				<E K="Density" V="1" />
+				<E K="MaskType" V="1" />
+			</MD>
+		</LD>
+</LDS>
