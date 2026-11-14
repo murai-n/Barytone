@@ -163,7 +163,10 @@ def tone_xyz(Y, tone):
     return np.stack([X, Y, Z], axis=-1)
 
 # ---------------------------------------------------------------- full chain
-def render(film, xyz, paper="MGIV RC", grade="2", filt="none", view_flare=0.003):
+VIEW_FLARE = 0.003             # print surface reflection under viewing light
+MID_L = 50.0                   # a metered mid-grey prints at this L*
+
+def render(film, xyz, paper="MGIV RC", grade="2", filt="none", view_flare=VIEW_FLARE):
     """Scene XYZ (D65) -> print XYZ. The only colour left is the paper's tone."""
     H = exposure(film, xyz, filt)
     Dn = neg_density(film, H)
@@ -177,13 +180,18 @@ def render(film, xyz, paper="MGIV RC", grade="2", filt="none", view_flare=0.003)
     return tone_xyz(Y, PAPERS[paper]["tone"])
 
 def _mid_offset(paper, grade):
-    """Centre the negative's density range on the grade's own range.
+    """Print exposure: the log exposure at which a metered mid-grey lands.
 
-    This is how a grade is chosen in the darkroom: pick the paper whose ISO
-    range matches the negative, which lands mid-grey mid-scale and keeps both
-    ends inside the paper rather than blocking up or blowing out."""
-    i = PAPERS[paper]["grades"].index(grade)
-    return PAPERS[paper]["iso_range"][i] / 100.0 / 2.0
+    Set so mid-grey prints at L* 50 (with the surface reflection), as a test
+    strip would be judged. Centring the negative on the grade's ISO range
+    instead (R/2) printed mid-grey at L* 28-37, a stop dark, and left the
+    whites of the soft grades grey (L* 69 at grade 00). With this anchor the
+    whites of grade 2 sit at L* 94-96, still short of paper white."""
+    xs, d = paper_curve(paper, grade)
+    Y = ((MID_L + 16) / 116) ** 3
+    Dt = -np.log10(Y * (1 + VIEW_FLARE) - VIEW_FLARE)
+    assert d[0] < Dt < d[-1], (paper, grade, Dt)
+    return float(np.interp(Dt, d, xs))
 
 # ---------------------------------------------------------------- ICC / style split
 # The kit splits the chain where the darkroom does: the ICC is the negative
@@ -213,7 +221,7 @@ def icc_xyz(film, xyz, filt="none"):
     Y = icc_value(neg_rel(film, xyz, filt)) ** ENC
     return np.asarray(Y, float)[..., None] * M.D65W
 
-def print_from_value(v, paper="MGIV RC", grade="2", view_flare=0.003):
+def print_from_value(v, paper="MGIV RC", grade="2", view_flare=VIEW_FLARE):
     """The paper-grade style's job: ICC value -> print XYZ. Inverts icc_value
     exactly, so icc_xyz followed by this equals render()."""
     u = (V_MID - np.asarray(v, float)) * NEG_SPAN
