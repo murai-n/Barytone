@@ -3,7 +3,7 @@
    Paper <LAB>   (Engine 900, single layer): tone + paper tint  -> applied 'to new layer'
 Camera-specific part is only the 16 Film styles (they carry the camera's ICC); the 7 Paper styles are universal.
 """
-import re, os, json, uuid, shutil
+import re, os, sys, json, uuid, shutil; sys.path.insert(0, "/home/claude/scripts")
 STY="/home/claude/out3/styles/"
 OUT="/home/claude/presets/"; shutil.rmtree(OUT,ignore_errors=True)
 FILM_IND="Film (Camera-specific)"   # per-camera: references the baked NikonZ5 ICC
@@ -130,3 +130,5 @@ for nm in ("+10Y","-10Y","+10M","-10M","+10C","-10C"):
         '\t<E K="StyleSource" V="Styles" />',f'\t<E K="UUID" V="{uid()}" />','</SL>','<LDS>',rgb_layer(f"Filter {nm}",c),'</LDS>',''])
     open(OUT+f"4 Filter/Filter {nm}.costyle","w").write(xml)
 print("Film Camera:",len(os.listdir(OUT+FILM_IND)),"| Film General:",len(os.listdir(OUT+FILM_GEN)),"| Paper:",len(os.listdir(OUT+"3 Paper")),"| Coupler:",len(os.listdir(OUT+"2 Coupler")),"| ICC Camera:",len(os.listdir(OUT+ICC_IND)),"| ICC General:",len(os.listdir(OUT+ICC_GEN)))
+# ---------- Black-and-white papers (camera-independent): 4 papers x grades 00-5 ----------
+import styles_mono; styles_mono.main(OUT)
