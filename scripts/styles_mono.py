@@ -28,9 +28,27 @@ TOL = 0.6 / 255; MAXBACK = 0.3 / 255; MAXBACK_16 = 0.5 / 255; NMAX = 16; ROUND =
 CH = ("GradationCurveRed", "GradationCurveGreen", "GradationCurveBlue")
 
 def target(paper, grade):
-    """Curve-domain output per channel, on the V grid (exact, before rounding)."""
-    lin = np.clip(mono.print_from_value(V, paper, grade) @ S.M_XYZ_SRGB.T, 0, 1)
-    return lin ** (1.0 / mono.ENC)
+    """Curve-domain output, the print's lightness only (grey), on the V grid.
+
+    The paper's colour is not in the curves: Capture One treats an image whose
+    ICC gives only greys as monochrome and drops any colour a curve adds, so
+    the colour goes into the B&W tool's split toning instead (split_tone)."""
+    Y = np.clip(mono.print_from_value(V, paper, grade)[:, 1], 0, 1)
+    return np.repeat((Y ** (1.0 / mono.ENC))[:, None], 3, 1)
+
+# Split toning (Capture One's B&W tool): shadows take the paper's image tone,
+# highlights its base tint. Hue and saturation are those of the target colour in
+# sRGB (HSV) at L* 30 and 88; SAT_GAIN scales Capture One's saturation to taste
+# (its scale against real chroma is not published; tune it on screen).
+SAT_GAIN = 1.0
+def split_tone(paper):
+    import colorsys, colour
+    t = mono.TONE[paper]; xy = colour.XYZ_to_xy(S.D65W)
+    def hs(L, ab):
+        rgb = np.clip(colour.XYZ_to_sRGB(colour.Lab_to_XYZ([L, ab[0], ab[1]], xy)), 0, 1)
+        h, sat, _ = colorsys.rgb_to_hsv(*rgb)
+        return (round(h * 360, 1), round(min(sat * 100 * SAT_GAIN, 100), 1)) if sat > 1e-3 else (0.0, 0.0)
+    return dict(dark=hs(30, t["image"]), light=hs(88, t["base"]))
 
 def _back(cs): return float((np.maximum.accumulate(cs) - cs).max())
 
@@ -63,7 +81,7 @@ def fit(T):
 def curves(paper, grade):
     """{key: [(x, y), ...]} for one paper and grade."""
     T = target(paper, grade); out = {}
-    neutral = not any(any(v) for v in mono.TONE[paper].values())
+    neutral = True        # curves carry lightness only; colour is split toning
     for c, k in enumerate(CH):
         if neutral and c != 1: continue
         idx, Ts = fit(T[:, c])
@@ -73,14 +91,16 @@ def curves(paper, grade):
 
 def curve_str(pts): return ";".join(f"{x:.6f},{y:.6f}" for x, y in pts)
 
-def style_xml(name, cv):
+def style_xml(name, cv, st=None):
     E = lambda k, v: f'\t\t\t<E K="{k}" V="{v}" />'
     layer = "\n".join(['\t\t<LD>', '\t\t\t<LA>', E("Clarity", "0"), E("DehazeAmount", "0"), E("Enabled", "1"),
         E("GradationCurveBlue", curve_str(cv[CH[2]])), E("GradationCurveGreen", curve_str(cv[CH[1]])),
         E("GradationCurveRed", curve_str(cv[CH[0]])), E("Name", name), E("Opacity", "100"), '\t\t\t</LA>',
         '\t\t\t<MD>', '\t\t\t\t<E K="Density" V="1" />', '\t\t\t\t<E K="MaskType" V="1" />', '\t\t\t</MD>', '\t\t</LD>'])
     # SL carries no base characteristics, so applying it never touches the film ICC (as the colour papers)
-    return "\n".join(['<?xml version="1.0"?>', '<SL Engine="1300">', f'\t<E K="Name" V="{name}" />',
+    bw = [] if st is None else [f'\t<E K="BwDarkHue" V="{st["dark"][0]}" />', f'\t<E K="BwDarkSaturation" V="{st["dark"][1]}" />',
+        '\t<E K="BwEnabled" V="1" />', f'\t<E K="BwLightHue" V="{st["light"][0]}" />', f'\t<E K="BwLightSaturation" V="{st["light"][1]}" />']
+    return "\n".join(['<?xml version="1.0"?>', '<SL Engine="1300">'] + bw + [f'\t<E K="Name" V="{name}" />',
         '\t<E K="StyleSource" V="Styles" />', f'\t<E K="UUID" V="{str(uuid.uuid4()).upper()}" />', '</SL>',
         '<LDS>', layer, '</LDS>', ''])
 
@@ -105,16 +125,16 @@ def main(out="/home/claude/presets"):
     for p in mono.PAPERS:
         for g in mono.PAPERS[p]["grades"]:
             cv = curves(p, g); name = style_name(p, g)
-            open(os.path.join(d, name + ".costyle"), "w").write(style_xml(name, cv))
+            open(os.path.join(d, name + ".costyle"), "w").write(style_xml(name, cv, split_tone(p)))
             worst = 0.0
             for f in mono.FILMS:
                 v = mono.icc_xyz(f, X)[:, 1] ** (1 / mono.ENC)
-                ref = lab(mono.render(f, X, p, g))
+                ref = lab(mono.render(f, X, p, g)); ref[:, 1:] = 0        # lightness only: colour is split toning
                 for cub in (True, False):
-                    got = lab(apply(cv, v, cub) @ S.M_SRGB_XYZ.T)
+                    got = lab(apply(cv, v, cub) @ S.M_SRGB_XYZ.T); got[:, 1:] = 0
                     worst = max(worst, float(np.sqrt(((got - ref) ** 2).sum(-1)).max()))
             rows.append((name, max(len(c) for c in cv.values()), worst))
-    for n, k, w in rows: print(f"{n:24s} {k:2d} points   ICC+style vs model: max dE76 {w:.2f}")
+    for n, k, w in rows: print(f"{n:24s} {k:2d} points   ICC+style vs model: max dL* {w:.2f}")
     print(len(rows), "styles in", d)
     return rows
 
