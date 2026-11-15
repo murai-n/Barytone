@@ -53,6 +53,8 @@ def main():
     for t in TARGETS:
         d = json.load(open(t))
         d["films"] = [e for e in d["films"] if e.get("kind") != "mono"] + films
+        ev_path = os.path.join(ROOT, "ds/camera_ev.json")      # per-camera exposure offsets (scripts/camera_ev.py)
+        if os.path.exists(ev_path): d["CAMERA_EV"] = json.load(open(ev_path))
         d["MONO"] = dict(ENC=mono.ENC, NEG_SPAN=mono.NEG_SPAN, V_MID=mono.V_MID, METER_LOG=mono.METER_LOG, preview=PREVIEW)
         json.dump(d, open(t, "w"))
     # reference renderings for the JS engine test
