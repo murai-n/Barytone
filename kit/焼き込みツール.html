@@ -2181,6 +2181,8 @@ body[data-os="mac"] [data-os="win"], body[data-os="win"] [data-os="mac"] { displ
 .hit[aria-pressed="true"] { background: var(--color-primitive-blue-50, #e8f1fe); box-shadow: inset calc(4 / 16 * 1rem) 0 0 var(--color-primitive-blue-900); }
 .hit-cam { font-weight: 700; overflow-wrap: anywhere; }
 .ev-row { margin: calc(4 / 16 * 1rem) 0 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: calc(4 / 16 * 1rem) calc(12 / 16 * 1rem); }
+.ev-lead { margin: calc(16 / 16 * 1rem) 0 0; }
+.ev-on { display: inline-flex; align-items: center; gap: calc(4 / 16 * 1rem); }
 .ev-input { width: 6em; font: inherit; padding: calc(2 / 16 * 1rem) calc(6 / 16 * 1rem); border: 1px solid var(--color-neutral-solid-gray-600); border-radius: calc(4 / 16 * 1rem); }
 .ev-note { color: var(--color-neutral-solid-gray-600); font-size: calc(14 / 16 * 1rem); }
 .mycam-row { display: flex; align-items: stretch; }
@@ -2323,6 +2325,7 @@ ul.plain > li + li { margin-top: calc(6 / 16 * 1rem); }
             <ul class="dads-file-upload__error-messages" id="upload-errors"></ul>
           </div>
           <p class="dads-file-upload__empty-message" id="empty-message">まだ何も選ばれていません</p>
+          <p class="ev-lead" id="ev-lead" hidden>適正なプリントを再現できるように、カメラごとに露出のオフセットを入れられます。値はカメラの機種から自動で入ります。使わないカメラはチェックを外してください。</p>
           <ul class="dads-file-upload__file-list" id="file-list" hidden></ul>
         </div>
       </div>
@@ -2806,13 +2809,13 @@ window.FILM_DATA = {"GRAY":0.18,"D65W":[0.9504559271,1.0,1.0890577508],"M_XYZ_to
   function costyle(film, opts) {
     /* black and white: the ICC alone is the film; paper and grade are separate styles */
     if (film.kind === "mono") return ['<?xml version="1.0"?>', '<SL Engine="1300">',
-      '\t<E K="Exposure" V="' + evStr(opts.ev) + '" />',
+      opts.ev != null ? '\t<E K="Exposure" V="' + evStr(opts.ev) + '" />' : null,
       '\t<E K="FilmCurve" V="' + xmlEsc(opts.filmCurve) + '" />',
       '\t<E K="ICCProfile" V="' + xmlEsc(opts.icc) + '" />',
       '\t<E K="Name" V="' + xmlEsc(opts.name) + '" />',
       '\t<E K="StyleSource" V="Styles" />',
       '\t<E K="UUID" V="' + uuid4() + '" />',
-      "</SL>", ""].join("\n");
+      "</SL>", ""].filter(function (l) { return l !== null; }).join("\n");
     var d = film.dev;
     if (!d) throw new BakeError("no_curves", "このフィルムにはスタイル用のカーブがありません。");
     var layer = ["\t\t<LD>", "\t\t\t<LA>",
@@ -2840,7 +2843,7 @@ window.FILM_DATA = {"GRAY":0.18,"D65W":[0.9504559271,1.0,1.0890577508],"M_XYZ_to
       '\t\t\t\t<E K="MaskType" V="1" />',
       "\t\t\t</MD>", "\t\t</LD>"].join("\n");
     return ['<?xml version="1.0"?>', '<SL Engine="1300">',
-      '\t<E K="Exposure" V="' + evStr(opts.ev) + '" />',
+      opts.ev != null ? '\t<E K="Exposure" V="' + evStr(opts.ev) + '" />' : null,
       '\t<E K="FilmCurve" V="' + xmlEsc(opts.filmCurve) + '" />',
       '\t<E K="FilmGrainAmount" V="0" />',
       '\t<E K="FilmGrainDensity" V="0" />',
@@ -2853,7 +2856,7 @@ window.FILM_DATA = {"GRAY":0.18,"D65W":[0.9504559271,1.0,1.0890577508],"M_XYZ_to
       '\t<E K="Shadow" V="0;0;0;0" />',
       '\t<E K="StyleSource" V="Styles" />',
       '\t<E K="UUID" V="' + uuid4() + '" />',
-      "</SL>", "<LDS>", layer, "</LDS>", ""].join("\n");
+      "</SL>", "<LDS>", layer, "</LDS>", ""].filter(function (l) { return l !== null; }).join("\n");
   }
 
   function zip(files) {
@@ -2923,6 +2926,7 @@ window.FILM_DATA = {"GRAY":0.18,"D65W":[0.9504559271,1.0,1.0890577508],"M_XYZ_to
   }
   function evClamp(v) { v = parseFloat(String(v).replace(",", ".")); return isFinite(v) ? Math.round(Math.min(Math.max(v, -3), 3) * 100) / 100 : null; }
   function evFmt(v) { return (v > 0 ? "+" : v < 0 ? "-" : "±") + Math.abs(v).toFixed(2); }
+  function evText(p) { return p.evOn ? evFmt(p.ev) + " EV" : "オフ"; }
   function camDisplay(p) {
     var c = camName(p);
     for (var i = 0; i < BRANDS.length; i++) {
@@ -3001,10 +3005,7 @@ window.FILM_DATA = {"GRAY":0.18,"D65W":[0.9504559271,1.0,1.0890577508],"M_XYZ_to
     var n = state.picks.length, p = state.picks[0], more = n > 1 ? " など" : "";
     Array.prototype.forEach.call(document.querySelectorAll(".icc-dir"), function (el) { el.textContent = n ? iccDir(p) + more : "ICC (カメラ名)"; });
     Array.prototype.forEach.call(document.querySelectorAll(".film-dir"), function (el) { el.textContent = n ? filmDir(p) + more : "1 Film (カメラ名)"; });
-    $("summary").textContent = !n ? "先に手順1でプロファイルを選んでください。"
-      : (n > 1 ? n + "台のカメラ（" + state.picks.map(function (q) { return camDisplay(q); }).join("、") + "）それぞれに、" : "")
-        + JOBS.length + "種類のフィルムについて、ICCプロファイルと、それを使うスタイルを作ります。" + fileName(p, JOBS[0]) + ".icm と " + styleName(p, JOBS[0]) + ".costyle のような名前で、1つのZIP（" + zipName() + "）にまとまります。"
-        + (n ? " スタイルには露光の補正（" + state.picks.map(function (q) { return (n > 1 ? camDisplay(q) + " " : "") + evFmt(q.ev) + " EV"; }).join("、") + "）が入ります。" : "");
+    $("summary").hidden = true;   /* the picks list already says what will be made */
     $("run-button").disabled = !n;
     $("run-button").textContent = n > 1 ? n + "台分のICCプロファイルを作成してダウンロード" : "ICCプロファイルを作成してダウンロード";
   }
@@ -3031,8 +3032,9 @@ window.FILM_DATA = {"GRAY":0.18,"D65W":[0.9504559271,1.0,1.0890577508],"M_XYZ_to
       return '<li class="dads-file-upload__file-item"><div class="dads-file-upload__file-marker"></div>' +
         '<div class="dads-file-upload__file-info"><p><span class="dads-file-upload__file-name">' + esc(p.file.name) + "</span>" +
         '<span class="dads-file-upload__file-meta">' + esc(camDisplay(p) + "・" + fmtSize(p.file.size)) + "</span></p>" +
-        '<p class="ev-row"><label>露光 <input class="ev-input" type="number" step="0.05" min="-3" max="3" inputmode="decimal" value="' + p.ev.toFixed(2) + '" data-ev="' + i + '" aria-describedby="ev-note-' + i + '"> EV</label>' +
-        '<span class="ev-note" id="ev-note-' + i + '">' + (p.evSrc === "table" ? "Capture One の標準カーブから求めた値" : p.evSrc === "saved" ? "前回使った値" : p.evSrc === "manual" ? "手で変えた値" : "表にない機種のため、全機種の中央値") + "</span></p></div>" +
+        '<p class="ev-row"><label class="ev-on"><input type="checkbox" data-evon="' + i + '"' + (p.evOn ? " checked" : "") + "> 露出オフセット</label>" +
+        '<input class="ev-input" type="text" inputmode="decimal" value="' + evFmt(p.ev) + '" data-ev="' + i + '" aria-label="' + esc(camDisplay(p)) + ' の露出オフセット（EV）"' + (p.evOn ? "" : " disabled") + "> EV" +
+        (p.evSrc === "default" ? '<span class="ev-note">表にない機種のため、全機種の中央値</span>' : "") + "</p></div>" +
         '<button class="dads-file-upload__remove-button dads-button" data-type="text" data-size="xs" type="button" data-remove="' + i + '" aria-label="' + esc(p.file.name) + ' を解除">解除</button></li>';
     }).join("");
     $("upload").setAttribute("data-multiple", state.picks.length > 1 ? "true" : "false");
@@ -3040,7 +3042,7 @@ window.FILM_DATA = {"GRAY":0.18,"D65W":[0.9504559271,1.0,1.0890577508],"M_XYZ_to
   }
   function syncEmpty() {
     var picked = state.picks.length > 0;
-    $("file-list").hidden = !picked;
+    $("file-list").hidden = !picked; $("ev-lead").hidden = !picked;
     $("empty-message").hidden = picked || !$("search-box").hidden;
   }
   function fmtSize(n) { return n >= 1048576 ? (n / 1048576).toFixed(1) + "MB" : Math.max(1, Math.round(n / 1024)) + "KB"; }
@@ -3059,8 +3061,9 @@ window.FILM_DATA = {"GRAY":0.18,"D65W":[0.9504559271,1.0,1.0890577508],"M_XYZ_to
       var buf = reader.result, info;
       try { info = FB.inspect(buf); } catch (err) { setUploadError(file.name + "：" + (err && err.message ? err.message : "読み込めませんでした。")); return; }
       var p = { file: file, buf: buf, info: info, cand: cand || null }, cam = camName(p), msg = file.name + " を読み込みました。";
-      if (evSaved == null) { var mine = mycams.find(function (m) { return myCamOf(m.name) === cam && m.ev != null; }); if (mine) evSaved = mine.ev; }
-      if (evSaved != null) { p.ev = evSaved; p.evSrc = "saved"; } else { var lk = evLookup(cam); p.ev = lk.ev; p.evSrc = lk.src; }
+      if (evSaved == null) { var mine = mycams.find(function (m) { return myCamOf(m.name) === cam && m.ev != null; }); if (mine) evSaved = { ev: mine.ev, on: mine.evOn }; }
+      var lk = evLookup(cam); p.evSrc = lk.src;
+      if (evSaved != null) { p.ev = evSaved.ev; p.evOn = evSaved.on !== false; if (p.ev !== lk.ev) p.evSrc = "saved"; } else { p.ev = lk.ev; p.evOn = true; }
       /* one profile per camera: the names inside the ZIP are per camera, so a second pick replaces the first */
       var same = state.picks.findIndex(function (q) { return camName(q) === cam; });
       if (same >= 0) { msg = camDisplay(p) + " は " + file.name + " に入れ替えました。"; state.picks[same] = p; }
@@ -3085,9 +3088,11 @@ window.FILM_DATA = {"GRAY":0.18,"D65W":[0.9504559271,1.0,1.0890577508],"M_XYZ_to
   function splitName(stem) {
     var at = -1;
     for (var i = 1; i < stem.length - 1; i++) {
-      if (stem.charAt(i) !== "-" || stem.charAt(i - 1) === "_" || stem.charAt(i + 1) === "_") continue;
+      /* a hyphen inside the profile name ("Nikon_-_Neutral", "Nikon - Neutral") is not the split */
+      if (stem.charAt(i) !== "-" || /[_ ]/.test(stem.charAt(i - 1)) || /[_ ]/.test(stem.charAt(i + 1))) continue;
+      if (stem.slice(0, i).indexOf(" ") >= 0) break;   /* camera ids have no spaces */
       var tail = stem.slice(i + 1);
-      if (tail.indexOf("_") >= 0 || /^[A-Za-z][A-Za-z0-9]{3,}$/.test(tail)) at = i;
+      if (/[_ ]/.test(tail) || /^[A-Za-z][A-Za-z0-9]{3,}$/.test(tail)) at = i;
     }
     return at > 0 ? [stem.slice(0, at), stem.slice(at + 1)] : [stem, ""];
   }
@@ -3214,7 +3219,7 @@ window.FILM_DATA = {"GRAY":0.18,"D65W":[0.9504559271,1.0,1.0890577508],"M_XYZ_to
   /* my cameras: every camera a ZIP was saved for, newest profile per camera, kept until deleted here */
   var mycams = [];
   function saveMyCams() {
-    try { var recs = mycams.map(function (m) { return { name: m.name, buf: m.buf, at: m.at, ev: m.ev }; });
+    try { var recs = mycams.map(function (m) { return { name: m.name, buf: m.buf, at: m.at, ev: m.ev, evOn: m.evOn }; });
       idbRun("readwrite", function (st) { st.put(recs, KEY_MY); })["catch"](function () {}); } catch (e) {}
   }
   function loadMyCams() {
@@ -3229,7 +3234,7 @@ window.FILM_DATA = {"GRAY":0.18,"D65W":[0.9504559271,1.0,1.0890577508],"M_XYZ_to
   function addMyCams(picks) {
     var at = new Date().toISOString().slice(0, 10);
     picks.forEach(function (p) {
-      var cam = camName(p), i = mycams.findIndex(function (m) { return myCamOf(m.name) === cam; }), rec = { name: p.file.name, buf: p.buf, at: at, ev: p.ev };
+      var cam = camName(p), i = mycams.findIndex(function (m) { return myCamOf(m.name) === cam; }), rec = { name: p.file.name, buf: p.buf, at: at, ev: p.ev, evOn: p.evOn };
       if (i >= 0) mycams[i] = rec; else mycams.push(rec);
     });
     mycams.sort(function (a, b) { return myCamOf(a.name).localeCompare(myCamOf(b.name), "en"); });
@@ -3242,7 +3247,7 @@ window.FILM_DATA = {"GRAY":0.18,"D65W":[0.9504559271,1.0,1.0890577508],"M_XYZ_to
       var disp = camDisplay({ file: { name: m.name } });
       return '<li class="mycam-row"><button type="button" class="hit" data-my="' + i + '" aria-pressed="' + on + '">' +
         '<span class="hit-cam">' + esc(disp) + "</span>" +
-        '<span class="hit-rest">' + esc(m.name + (m.at ? "　前回 " + m.at : "") + (m.ev != null ? "　露光 " + evFmt(m.ev) + " EV" : "")) + "</span></button>" +
+        '<span class="hit-rest">' + esc(m.name + (m.at ? "　前回 " + m.at : "") + (m.ev != null ? "　露出オフセット " + (m.evOn === false ? "オフ" : evFmt(m.ev) + " EV") : "")) + "</span></button>" +
         '<button type="button" class="dads-button mycam-del" data-type="text" data-size="xs" data-mydel="' + i + '" aria-label="' + esc(disp) + ' をマイカメラから削除">削除</button></li>';
     }).join("");
     $("lead-folder").textContent = mycams.length ? "ほかのカメラは、Capture One が持っているカメラプロファイルのフォルダを選ぶと、カメラ名で探せます。" : "Capture One が持っているカメラプロファイルのフォルダを選ぶと、カメラ名で探せます。";
@@ -3251,11 +3256,11 @@ window.FILM_DATA = {"GRAY":0.18,"D65W":[0.9504559271,1.0,1.0890577508],"M_XYZ_to
     var m = mycams[i], cam = myCamOf(m.name), k = state.picks.findIndex(function (p) { return camName(p) === cam && p.file.name === m.name; });
     if (k >= 0) { if (!only) { dropPick(k); $("upload-announcer").textContent = m.name + " を解除しました。"; } return; }
     var f; try { f = new File([m.buf], m.name, { type: "application/vnd.iccprofile" }); } catch (e) { return; }
-    takeFile(f, false, null, m.ev != null ? m.ev : null);
+    takeFile(f, false, null, m.ev != null ? { ev: m.ev, on: m.evOn } : null);
   }
   function remember() {
     try {
-      var recs = state.picks.map(function (p) { return { name: p.file.name, buf: p.buf, ev: p.ev }; });
+      var recs = state.picks.map(function (p) { return { name: p.file.name, buf: p.buf, ev: p.ev, evOn: p.evOn }; });
       idbRun("readwrite", function (st) { st["delete"](KEY); if (recs.length) st.put(recs, KEY_ALL); else st["delete"](KEY_ALL); })["catch"](function () {});
     } catch (e) {}
   }
@@ -3270,7 +3275,7 @@ window.FILM_DATA = {"GRAY":0.18,"D65W":[0.9504559271,1.0,1.0890577508],"M_XYZ_to
           if (!rec || !rec.buf || !rec.name) return;
           var f;
           try { f = new File([rec.buf], rec.name, { type: "application/vnd.iccprofile" }); } catch (e) { return; }
-          takeFile(f, true, null, rec.ev != null ? rec.ev : null);
+          takeFile(f, true, null, rec.ev != null ? { ev: rec.ev, on: rec.evOn } : null);
         });
       }, function () {});
     } catch (e) {}
@@ -3356,12 +3361,18 @@ window.FILM_DATA = {"GRAY":0.18,"D65W":[0.9504559271,1.0,1.0890577508],"M_XYZ_to
   });
   $("mycam-all").addEventListener("click", function () { mycams.forEach(function (m, i) { pickMyCam(i, true); }); });
   $("file-list").addEventListener("change", function (e) {
-    var t = e.target; if (!t.hasAttribute || !t.hasAttribute("data-ev")) return;
-    var p = state.picks[+t.getAttribute("data-ev")], v = evClamp(t.value); if (!p) return;
-    if (v == null) { t.value = p.ev.toFixed(2); return; }
-    p.ev = v; p.evSrc = "manual"; t.value = v.toFixed(2);
-    var note = $("ev-note-" + t.getAttribute("data-ev")); if (note) note.textContent = "手で変えた値";
-    remember(); refresh();
+    var t = e.target;
+    if (t.hasAttribute && t.hasAttribute("data-evon")) {
+      var q = state.picks[+t.getAttribute("data-evon")]; if (!q) return;
+      q.evOn = t.checked;
+      var box = $("file-list").querySelector('[data-ev="' + t.getAttribute("data-evon") + '"]'); if (box) box.disabled = !q.evOn;
+      remember(); return;
+    }
+    if (!t.hasAttribute || !t.hasAttribute("data-ev")) return;
+    var p = state.picks[+t.getAttribute("data-ev")], v = evClamp(String(t.value).replace(/^\s*\+/, "")); if (!p) return;
+    if (v == null) { t.value = evFmt(p.ev); return; }
+    p.ev = v; p.evSrc = "manual"; t.value = evFmt(v);
+    remember();
   });
   $("file-list").addEventListener("click", function (e) {
     var b = e.target.closest && e.target.closest("[data-remove]"); if (!b) return;
@@ -3437,7 +3448,7 @@ window.FILM_DATA = {"GRAY":0.18,"D65W":[0.9504559271,1.0,1.0890577508],"M_XYZ_to
         try {
           var bytes = FB.bake(C, p.buf.slice(0), j.film, j.variant, name);
           files.push({ name: root + "/" + iccDir(p) + "/" + name + ".icm", data: bytes });
-          var sty = FB.costyle(j.film, { icc: name + ".icm", filmCurve: filmCurveName(p), name: styleName(p, j), ev: p.ev });
+          var sty = FB.costyle(j.film, { icc: name + ".icm", filmCurve: filmCurveName(p), name: styleName(p, j), ev: p.evOn ? p.ev : null });
           files.push({ name: root + "/" + filmDir(p) + "/" + kindDir(j) + "/" + styleName(p, j) + ".costyle", data: new TextEncoder().encode(sty) });
         } catch (err) {
           $("progress").hidden = true; $("status").textContent = ""; btn.disabled = false;
