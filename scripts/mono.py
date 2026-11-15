@@ -77,8 +77,9 @@ def neg_density(film, H):
     c = FILMS[film]["ch"]
     x = np.asarray(c["x"], float); d = np.asarray(c["d"], float)
     lo, hi = x[0], x[-1]
-    # a metered mid-grey sits about 10x above the speed point on the curve
-    pos = speed_point(film) + 1.0 + np.log10(np.asarray(H, float) / GRAY)
+    # Meter calibration: the speed point gets 0.80/S lux.s (ISO 6) and a metered
+    # mid-grey 10/S, a ratio of 12.5 -> 1.1 log. (Zone I to Zone V, 4 stops, agrees.)
+    pos = speed_point(film) + 1.1 + np.log10(np.asarray(H, float) / GRAY)
     return np.interp(np.clip(pos, lo, hi), x, d)
 
 # ---------------------------------------------------------------- paper
