@@ -247,7 +247,7 @@ Capture One は既定のカーブ（Film Standard）で中間グレーを持ち�
 Linear Response ではそれが消えて、機種によって 0〜1.9 EV 暗くなる。`scripts/camera_ev.py` は
 Capture One の Film Curves フォルダ（`.fcrv`）からその量を機種ごとに計算し、`ds/camera_ev.json` に
 数値だけを書く（`.fcrv` そのものは置かない）。`export_mono.py` がそれを `films.json` に入れ、
-焼き込みツールは選んだカメラの値を Film スタイルの `Exposure` に書く。詳細は `HANDOVER.md`。
+焼き込みツールは選んだカメラの値を、カメラごとの Exposure スタイル（Film スタイルとは別、最初に 1 回当てる）に書く。詳細は `HANDOVER.md`。
 
     python3 scripts/camera_ev.py "/path/to/Capture One 23/Film Curves"
     python3 scripts/export_mono.py

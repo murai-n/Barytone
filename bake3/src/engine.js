@@ -357,13 +357,22 @@
     for (i = 0; i < 16; i++) h.push((b[i] + 0x100).toString(16).slice(1).toUpperCase());
     return h.slice(0, 4).join("") + "-" + h.slice(4, 6).join("") + "-" + h.slice(6, 8).join("") + "-" + h.slice(8, 10).join("") + "-" + h.slice(10, 16).join("");
   }
-  /* exposure offset in stops, written into the style so Capture One lifts the raw
-     the way its default curve would (Linear Response drops that lift) */
+  /* exposure offset in stops: Capture One lifts the raw with its default curve and
+     Linear Response drops that lift, so this puts it back */
   function evStr(v) { v = +v || 0; return (Math.round(v * 100) / 100).toString(); }
+  /* the camera's exposure offset as a style of its own, applied once: kept out of
+     the Film styles so switching films never resets an exposure set by hand */
+  function exposureStyle(ev, name) {
+    return ['<?xml version="1.0"?>', '<SL Engine="1300">',
+      '\t<E K="Exposure" V="' + evStr(ev) + '" />',
+      '\t<E K="Name" V="' + xmlEsc(name) + '" />',
+      '\t<E K="StyleSource" V="Styles" />',
+      '\t<E K="UUID" V="' + uuid4() + '" />',
+      "</SL>", ""].join("\n");
+  }
   function costyle(film, opts) {
     /* black and white: the ICC alone is the film; paper and grade are separate styles */
     if (film.kind === "mono") return ['<?xml version="1.0"?>', '<SL Engine="1300">',
-      opts.ev != null ? '\t<E K="Exposure" V="' + evStr(opts.ev) + '" />' : null,
       '\t<E K="FilmCurve" V="' + xmlEsc(opts.filmCurve) + '" />',
       '\t<E K="ICCProfile" V="' + xmlEsc(opts.icc) + '" />',
       '\t<E K="Name" V="' + xmlEsc(opts.name) + '" />',
@@ -397,7 +406,6 @@
       '\t\t\t\t<E K="MaskType" V="1" />',
       "\t\t\t</MD>", "\t\t</LD>"].join("\n");
     return ['<?xml version="1.0"?>', '<SL Engine="1300">',
-      opts.ev != null ? '\t<E K="Exposure" V="' + evStr(opts.ev) + '" />' : null,
       '\t<E K="FilmCurve" V="' + xmlEsc(opts.filmCurve) + '" />',
       '\t<E K="FilmGrainAmount" V="0" />',
       '\t<E K="FilmGrainDensity" V="0" />',
@@ -440,5 +448,5 @@
     return out;
   }
 
-  root.FilmBaker = { inspect: inspect, bake: bake, zip: zip, costyle: costyle, filmLinear: filmLinear, renderXYZ: renderXYZ, BakeError: BakeError };
+  root.FilmBaker = { inspect: inspect, bake: bake, zip: zip, costyle: costyle, exposureStyle: exposureStyle, filmLinear: filmLinear, renderXYZ: renderXYZ, BakeError: BakeError };
 })(typeof window !== "undefined" ? window : globalThis);

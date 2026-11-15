@@ -548,14 +548,21 @@
     $("progress").hidden = false; $("progress-bar").style.width = "0%";
     var files = [], i = 0, total = picks.length * js.length, root = rootDir(), zname = zipName();
     function step() {
-      if (i >= total) return finish();
+      if (i >= total) {
+        picks.forEach(function (p) {
+          if (!p.evOn) return;
+          var en = "Exposure " + evFmt(p.ev) + " (" + camDisplay(p) + ")";
+          files.push({ name: root + "/" + filmDir(p) + "/" + en + ".costyle", data: new TextEncoder().encode(FB.exposureStyle(p.ev, en)) });
+        });
+        return finish();
+      }
       var p = picks[Math.floor(i / js.length)], j = js[i % js.length], name = fileName(p, j);
       $("status").textContent = (picks.length > 1 ? camDisplay(p) + "　" : "") + (i % js.length + 1) + " / " + js.length + "：" + j.film.name + "（" + j.variant.label + "）を作成中…";
       setTimeout(function () {
         try {
           var bytes = FB.bake(C, p.buf.slice(0), j.film, j.variant, name);
           files.push({ name: root + "/" + iccDir(p) + "/" + name + ".icm", data: bytes });
-          var sty = FB.costyle(j.film, { icc: name + ".icm", filmCurve: filmCurveName(p), name: styleName(p, j), ev: p.evOn ? p.ev : null });
+          var sty = FB.costyle(j.film, { icc: name + ".icm", filmCurve: filmCurveName(p), name: styleName(p, j) });
           files.push({ name: root + "/" + filmDir(p) + "/" + kindDir(j) + "/" + styleName(p, j) + ".costyle", data: new TextEncoder().encode(sty) });
         } catch (err) {
           $("progress").hidden = true; $("status").textContent = ""; btn.disabled = false;
