@@ -53,7 +53,7 @@ def main():
     for t in TARGETS:
         d = json.load(open(t))
         d["films"] = [e for e in d["films"] if e.get("kind") != "mono"] + films
-        d["MONO"] = dict(ENC=mono.ENC, NEG_SPAN=mono.NEG_SPAN, V_MID=mono.V_MID, preview=PREVIEW)
+        d["MONO"] = dict(ENC=mono.ENC, NEG_SPAN=mono.NEG_SPAN, V_MID=mono.V_MID, METER_LOG=mono.METER_LOG, preview=PREVIEW)
         json.dump(d, open(t, "w"))
     # reference renderings for the JS engine test
     rng = np.random.default_rng(7)
