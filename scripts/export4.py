@@ -4,7 +4,7 @@ import model3 as M, model
 ALIAS=json.load(open("/home/claude/out3/alias.json")) if False else None
 import importlib, build3
 ALIAS=build3.ALIAS
-DESC={"Portra 160NC":"旧世代ポートラ。自然で低彩度の発色","Portra 160VC":"旧世代ポートラ。鮮やかめの発色","Portra 400NC":"旧世代ポートラの高感度。自然な発色","Portra 400VC":"旧世代ポートラの高感度。鮮やかめ","Vericolor III":"古典的なポートレートネガ","Ultra Color 100UC":"高彩度ネガ。くっきりした発色","Ultra Color 400UC":"高彩度ネガの高感度版","Pro Image 100":"暖色寄りで肌がやさしいネガ","Ektachrome EPN":"中性・忠実発色のポジ","Velvia 100":"高彩度ポジ。Velvia 50 より穏やか","Superia X-TRA 400":"大衆ネガの標準的な発色","Portra 160":"やわらかい階調、穏やかな色","Portra 400":"肌色の定番、懐の深いネガ","Ektar 100":"高彩度・微粒子のネガ","Pro 400H":"淡い緑とハイキー向き","Provia 100F":"標準的な発色のポジ","Velvia 50":"高彩度・高コントラストのポジ","Ektachrome E100":"澄んだ青のポジ",
+DESC={"Portra 160NC":"旧世代ポートラ。自然で低彩度の発色","Portra 160VC":"旧世代ポートラ。鮮やかめ（NC に彩度 +15%）","Portra 400NC":"旧世代ポートラの高感度。自然な発色","Portra 400VC":"旧世代ポートラの高感度。鮮やかめ（NC に彩度 +15%）","Vericolor III":"古典的なポートレートネガ","Ultra Color 100UC":"高彩度ネガ。くっきりした発色","Ultra Color 400UC":"高彩度ネガの高感度版","Pro Image 100":"暖色寄りで肌がやさしいネガ","Ektachrome EPN":"中性・忠実発色のポジ","Velvia 100":"高彩度ポジ。Velvia 50 より穏やか","Superia X-TRA 400":"大衆ネガの標準的な発色","Portra 160":"やわらかい階調、穏やかな色","Portra 400":"肌色の定番、懐の深いネガ","Ektar 100":"高彩度・微粒子のネガ","Pro 400H":"淡い緑とハイキー向き","Provia 100F":"標準的な発色のポジ","Velvia 50":"高彩度・高コントラストのポジ","Ektachrome E100":"澄んだ青のポジ",
 "Gold 200":"暖色寄りの消費者向け定番","Portra 800":"ポートラの高感度版","Vision3 500T":"映画用タングステン、広いラティチュード","Kodachrome 25":"外式ポジの原点、低感度","Kodachrome 64":"外式ポジ、濃い影と締まった発色","Kodachrome 200":"外式ポジの高感度版","Ektachrome 64T":"タングステン用ポジ。昼光では補正なしで青く転ぶ","Ektachrome 160T":"タングステン用ポジ（高感度）。昼光では青く転ぶ","Fujichrome 64T II":"富士のタングステン用ポジ。昼光では青く転ぶ","Astia 100F":"軟調設計のポジ（データ上は高彩度）","Pro 160NS":"スタジオポートレート向けネガ","Pro 800Z":"高感度のプロ用ネガ"}
 old=json.load(open("/home/claude/m3/films3.json"))
 d={k:v for k,v in old.items() if k!="films"}
@@ -29,6 +29,7 @@ for f in ORDER:
         u=M.UNMIX[f]
         e["ux"]=np.asarray(u["x"]).tolist(); e["ua"]=np.asarray(u["a"]).T.tolist(); e["E"]=np.asarray(u["E"]).tolist()
         e["norm"]=np.asarray(M.POSNORM[f]).tolist()
+    if a in ("KP160VC", "KP400VC"): e["sat"] = 1.15   # see fix_portra_e190.py
     films.append(e)
 
 # ---- Develop colour curves, lifted from the built styles so the browser tool

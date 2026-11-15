@@ -222,9 +222,20 @@
     var val = interp(u, P.REF.u, P.REF.v), Y = Math.pow(val, P.ENC), w = C.D65W;   /* the reference print (mono.icc_value) */
     return [Y * w[0], Y * w[1], Y * w[2]];
   }
+  /* A look baked on top of the film data (film.sat, e.g. Portra VC): chroma
+     scaled in CIELAB (D65 white), lightness and hue kept, so greys - and the
+     Develop and Paper curves built on them - are unchanged. */
+  function saturate(C, X, s) {
+    var w = C.D65W;
+    function f(t) { return t > E_ ? Math.cbrt(t) : (K_ * t + 16) / 116; }
+    function fi(t) { var t3 = t * t * t; return t3 > E_ ? t3 : (116 * t - 16) / K_; }
+    var fx = f(X[0] / w[0]), fy = f(X[1] / w[1]), fz = f(X[2] / w[2]);
+    var a = 500 * (fx - fy) * s, b = 200 * (fy - fz) * s;
+    return [fi(fy + a / 500) * w[0], X[1], fi(fy - b / 200) * w[2]];
+  }
   function renderXYZ(C, film, v, xyz) {
     if (film.kind === "mono") return monoRender(C, film, v, xyz);
-    if (v.base) return baseRender(C, film, v, xyz);
+    if (v.base) return film.sat ? saturate(C, baseRender(C, film, v, xyz), film.sat) : baseRender(C, film, v, xyz);
     var H = exposures(film, spectrum(C, xyz));
     if (v.paper) return viewAdapt(C, printRender(C, film, v, H), "print");
     return film.kind === "neg" ? negRender(C, film, v, H) : viewAdapt(C, posRender(C, film, v, H), "slide");

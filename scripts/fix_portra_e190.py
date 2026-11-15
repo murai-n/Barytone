@@ -17,6 +17,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import spec3 as S
 
 ROOT = S.ROOT
+# Portra VC: the sheet's curves give the same colour as NC once the base ICC
+# normalises tone, so VC is NC data plus a baked chroma boost (engine saturate()).
+SAT = {"KP160VC": 1.15, "KP400VC": 1.15}
 IDS = {"Portra 160NC": "KP160NC", "Portra 160VC": "KP160VC",
        "Portra 400NC": "KP400NC", "Portra 400VC": "KP400VC"}
 
@@ -60,6 +63,7 @@ def main(src):
                   f"K change {np.abs(K - np.array(e['K'])).max():.4f}")
             e["K"] = K.tolist(); e["ref"] = ref; e["g"] = g; e["pg"] = g; e["dref"] = dref
             e["ch"] = {k: dict(x=list(map(float, v["ch"][k]["x"])), d=list(map(float, v["ch"][k]["d"]))) for k in "RGB"}
+            if e["id"] in SAT: e["sat"] = SAT[e["id"]]
             e["bal"] = {pid: [b + dD for b in bal] for pid, bal in e["bal"].items()}
         json.dump(d, open(p, "w"))
         print("wrote", p)
