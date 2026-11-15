@@ -6,8 +6,10 @@ paper and grade. They are camera-independent and work on every mono film.
 
 Curve points. A hard grade is steep in the curve domain (slope 12 at grade 5)
 and the paper saturates at both ends, so fixed 16 points cannot follow it.
-Points are placed adaptively until both a straight-line and a natural cubic
-reading of them are within 0.6/255 of the target. Capture One's exact
+Points are placed adaptively, at most 16 (Capture One reads no more than 16
+points per curve: every style it accepts uses 16, and the earlier 20-40 point
+B&W curves had no effect at all), until both a straight-line and a natural
+cubic reading of them are within 0.6/255 of the target. Capture One's exact
 interpolator is not published, so both are held to the tolerance. Before
 fitting, the target is rounded with a Gaussian (sigma 0.004) at the two clip
 corners; a spline through a hard corner rings. Any drop of the cubic below its
@@ -20,9 +22,9 @@ from scipy.ndimage import gaussian_filter1d
 import mono, spec3 as S
 
 PAPER_ID = {"MGIV RC": "IMR", "RC Cooltone": "ICT", "MGIV FB": "IMF", "FB Warmtone": "IFW"}
-FOLDER = "3 Paper (B&W)"
+FOLDER = "3 Paper/B&W"
 V = np.linspace(0, 1, 2001); DV = V[1] - V[0]
-TOL = 0.6 / 255; MAXBACK = 0.3 / 255; NMAX = 40; ROUND = 0.004
+TOL = 0.6 / 255; MAXBACK = 0.3 / 255; MAXBACK_16 = 0.5 / 255; NMAX = 16; ROUND = 0.004   # Capture One reads at most 16 points per curve (every working style uses 16)
 CH = ("GradationCurveRed", "GradationCurveGreen", "GradationCurveBlue")
 
 def target(paper, grade):
@@ -32,9 +34,8 @@ def target(paper, grade):
 
 def _back(cs): return float((np.maximum.accumulate(cs) - cs).max())
 
-def fit(T):
-    """Indices into V of the control points for one channel."""
-    T = gaussian_filter1d(T, ROUND / DV, mode="nearest")
+def _fit_once(T, rnd):
+    T = gaussian_filter1d(T, rnd / DV, mode="nearest")
     idx = [0, len(V) - 1]
     while len(idx) < NMAX:
         xs = V[idx]; cs = CubicSpline(xs, T[idx], bc_type="natural")(V)
@@ -44,7 +45,20 @@ def fit(T):
         free = [k for k in (n, n + 1, n - 1, n + 2, n - 2) if 0 <= k < len(V) and k not in idx]
         if not free: break
         idx = sorted(idx + [free[0]])
-    return idx, T
+    cs = CubicSpline(V[idx], T[idx], bc_type="natural")(V)
+    return idx, T, _back(cs)
+
+ROUNDS = (0.004, 0.006, 0.009, 0.013, 0.018, 0.025, 0.035)
+
+def fit(T):
+    """Indices into V of the control points for one channel (at most NMAX).
+
+    With only 16 points a cubic through a hard clip corner rings; the corner is
+    rounded a little more each try until the cubic stops running backwards."""
+    for rnd in ROUNDS:
+        idx, Ts, back = _fit_once(T, rnd)
+        if back < MAXBACK_16: break
+    return idx, Ts
 
 def curves(paper, grade):
     """{key: [(x, y), ...]} for one paper and grade."""
