@@ -47,11 +47,34 @@ Linear Response の逆関数を Develop カーブに畳み込む作業は不要�
 例外は 31 機種（Leica Q・SL・X 系の 11 点カーブ、Mamiya M18/M22/M31 のゲイン 1.418、Epson R-D1 など）。
 これらは露光オフセットの計算には Linear Response のカーブを含めてある。階調の形まで直すかは未決。
 
+## ICC の置き場所：OS で逆（2026-11-15、Mac で確認）
+
+スタイルから ICC を当てられるかは、置き場所で決まる。
+
+| OS | `/Library/ColorSync/Profiles`（Mac）・既定の Color Profiles（Windows） | Styles フォルダ |
+|---|---|---|
+| Mac | 当たる（確認済み） | 当たらない（確認済み） |
+| Windows | 当たらない（以前の報告） | 当たる（以前の報告） |
+
+Mac で Styles フォルダに置くと、「スタイル "Film KVPS (Nikon Z5)" には、バリアントに適用できない ICC
+プロファイルが含まれています。ICC プロファイルが壊れている可能性があります。」と出る（カーブの
+Linear Response は当たる）。ICC の中身は原因ではない。同じファイルを ColorSync に置けば当たるし、
+下の 2 つのタグを取り除いた版でも Styles フォルダでは当たらなかった。
+
+- 以前合意した「両 OS とも ICC フォルダを Styles に入れて統一」は、**Mac では使えない**ので取りやめ。
+  Mac は今のツールとマニュアルの案内（`/Library/ColorSync/Profiles`）のままでよい。
+- Windows は以前の報告どおりなら Styles フォルダが正しく、ツールの案内（Color Profiles）を変える必要がある。
+  手元で未確認なので、Windows で 1 回確かめてから直す。
+
+参考：Capture One 23 の「Nikon - Neutral」などの Look 系プロファイルは Nikon 共通で、Z5 用のファイルにも
+内部名「NikonD850-Nikon - Neutral」と、組にするカーブの指定（`P1FC` タグ = `NikonC1-Look Neutral`）が入っている。
+焼いた ICC にも残るが、ColorSync に置けば問題なく当たる。
+
 ## 次の着手順
 
 1. Nikon Z5 でグレーカードを撮り、表の +1.25 EV で L\* ≈ 50（sRGB ≈ 119）になるか確認
    （ずれたら、カーブ座標の解釈か gain の扱いを見直す）
-2. ICC 配置をフォルダ単位に統一（ツール＋マニュアル）
+2. Windows での ICC の置き場所を確かめ、ツールとマニュアルの Windows 向け案内を直すか決める（下記）
 3. Linear Response が直線でない 31 機種の階調をどうするか
 4. キット再パッケージ
 
