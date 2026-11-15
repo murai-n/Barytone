@@ -1,13 +1,8 @@
 <?xml version="1.0"?>
 <SL Engine="1300">
-	<E K="BwDarkHue" V="0.0" />
-	<E K="BwDarkSaturation" V="0.0" />
-	<E K="BwEnabled" V="1" />
-	<E K="BwLightHue" V="39.7" />
-	<E K="BwLightSaturation" V="1.0" />
 	<E K="Name" V="Paper IMF grade 00" />
 	<E K="StyleSource" V="Styles" />
-	<E K="UUID" V="1877B46B-4942-4BF9-A427-76D75840204B" />
+	<E K="UUID" V="2690D11A-4197-4D60-8CED-B4BD4185840E" />
 </SL>
 <LDS>
 		<LD>

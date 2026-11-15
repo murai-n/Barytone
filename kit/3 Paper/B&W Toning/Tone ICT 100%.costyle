@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<SL Engine="1300">
+	<E K="BwDarkHue" V="210.9" />
+	<E K="BwDarkSaturation" V="13.9" />
+	<E K="BwEnabled" V="1" />
+	<E K="BwLightHue" V="218.7" />
+	<E K="BwLightSaturation" V="3.1" />
+	<E K="Name" V="Tone ICT 100%" />
+	<E K="StyleSource" V="Styles" />
+	<E K="UUID" V="4FB06187-2306-47C7-9C2C-EB22976700C3" />
+</SL>
