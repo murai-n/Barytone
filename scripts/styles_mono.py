@@ -31,24 +31,10 @@ def target(paper, grade):
     """Curve-domain output, the print's lightness only (grey), on the V grid.
 
     The paper's colour is not in the curves: Capture One treats an image whose
-    ICC gives only greys as monochrome and drops any colour a curve adds, so
-    the colour goes into the B&W tool's split toning instead (split_tone)."""
+    ICC gives only greys as monochrome and drops any colour a curve adds. The
+    kit prints in pure black; toning, if wanted, is the B&W tool's split toning."""
     Y = np.clip(mono.print_from_value(V, paper, grade)[:, 1], 0, 1)
     return np.repeat((Y ** (1.0 / mono.ENC))[:, None], 3, 1)
-
-# Split toning (Capture One's B&W tool): shadows take the paper's image tone,
-# highlights its base tint. Hue and saturation are those of the target colour in
-# sRGB (HSV) at L* 30 and 88; SAT_GAIN scales Capture One's saturation to taste
-# (its scale against real chroma is not published; tune it on screen).
-SAT_GAIN = 1.0
-def split_tone(paper):
-    import colorsys, colour
-    t = mono.TONE[paper]; xy = colour.XYZ_to_xy(S.D65W)
-    def hs(L, ab):
-        rgb = np.clip(colour.XYZ_to_sRGB(colour.Lab_to_XYZ([L, ab[0], ab[1]], xy)), 0, 1)
-        h, sat, _ = colorsys.rgb_to_hsv(*rgb)
-        return (round(h * 360, 1), round(min(sat * 100 * SAT_GAIN, 100), 1)) if sat > 1e-3 else (0.0, 0.0)
-    return dict(dark=hs(30, t["image"]), light=hs(88, t["base"]))
 
 def _back(cs): return float((np.maximum.accumulate(cs) - cs).max())
 
@@ -91,16 +77,14 @@ def curves(paper, grade):
 
 def curve_str(pts): return ";".join(f"{x:.6f},{y:.6f}" for x, y in pts)
 
-def style_xml(name, cv, st=None):
+def style_xml(name, cv):
     E = lambda k, v: f'\t\t\t<E K="{k}" V="{v}" />'
     layer = "\n".join(['\t\t<LD>', '\t\t\t<LA>', E("Clarity", "0"), E("DehazeAmount", "0"), E("Enabled", "1"),
         E("GradationCurveBlue", curve_str(cv[CH[2]])), E("GradationCurveGreen", curve_str(cv[CH[1]])),
         E("GradationCurveRed", curve_str(cv[CH[0]])), E("Name", name), E("Opacity", "100"), '\t\t\t</LA>',
         '\t\t\t<MD>', '\t\t\t\t<E K="Density" V="1" />', '\t\t\t\t<E K="MaskType" V="1" />', '\t\t\t</MD>', '\t\t</LD>'])
     # SL carries no base characteristics, so applying it never touches the film ICC (as the colour papers)
-    bw = [] if st is None else [f'\t<E K="BwDarkHue" V="{st["dark"][0]}" />', f'\t<E K="BwDarkSaturation" V="{st["dark"][1]}" />',
-        '\t<E K="BwEnabled" V="1" />', f'\t<E K="BwLightHue" V="{st["light"][0]}" />', f'\t<E K="BwLightSaturation" V="{st["light"][1]}" />']
-    return "\n".join(['<?xml version="1.0"?>', '<SL Engine="1300">'] + bw + [f'\t<E K="Name" V="{name}" />',
+    return "\n".join(['<?xml version="1.0"?>', '<SL Engine="1300">', f'\t<E K="Name" V="{name}" />',
         '\t<E K="StyleSource" V="Styles" />', f'\t<E K="UUID" V="{str(uuid.uuid4()).upper()}" />', '</SL>',
         '<LDS>', layer, '</LDS>', ''])
 
@@ -125,51 +109,18 @@ def main(out="/home/claude/presets"):
     for p in mono.PAPERS:
         for g in mono.PAPERS[p]["grades"]:
             cv = curves(p, g); name = style_name(p, g)
-            open(os.path.join(d, name + ".costyle"), "w").write(style_xml(name, cv))   # pure black: colour is a Toning style
+            open(os.path.join(d, name + ".costyle"), "w").write(style_xml(name, cv))   # pure black
             worst = 0.0
             for f in mono.FILMS:
                 v = mono.icc_xyz(f, X)[:, 1] ** (1 / mono.ENC)
-                ref = lab(mono.render(f, X, p, g)); ref[:, 1:] = 0        # lightness only: colour is split toning
+                ref = lab(mono.render(f, X, p, g)); ref[:, 1:] = 0        # lightness only (pure black print)
                 for cub in (True, False):
                     got = lab(apply(cv, v, cub) @ S.M_SRGB_XYZ.T); got[:, 1:] = 0
                     worst = max(worst, float(np.sqrt(((got - ref) ** 2).sum(-1)).max()))
             rows.append((name, max(len(c) for c in cv.values()), worst))
     for n, k, w in rows: print(f"{n:24s} {k:2d} points   ICC+style vs model: max dL* {w:.2f}")
     print(len(rows), "styles in", d)
-    write_toning(out); write_detail(out)
     return rows
-
-# Toning: the paper's colour on its own, so a Paper style alone gives a pure black.
-# Capture One drops colour that layers add to a monochrome image, so toning cannot be
-# a layer with an opacity; it is the B&W tool's split toning, in strength steps.
-TONE_FOLDER = "3 Paper/B&W Toning"; TONE_STEPS = (25, 50, 100)
-def _sl(name, rows):
-    return "\n".join(['<?xml version="1.0"?>', '<SL Engine="1300">'] + rows + [f'\t<E K="Name" V="{name}" />',
-        '\t<E K="StyleSource" V="Styles" />', f'\t<E K="UUID" V="{str(uuid.uuid4()).upper()}" />', '</SL>', ''])
-def write_toning(out):
-    d = os.path.join(out, TONE_FOLDER); os.makedirs(d, exist_ok=True)
-    for f in os.listdir(d): os.remove(os.path.join(d, f))
-    n = 0
-    for p in mono.PAPERS:
-        st = split_tone(p)
-        if st["dark"][1] == 0 and st["light"][1] < 2: continue          # a neutral paper has nothing to tone
-        for k in TONE_STEPS:
-            name = f"Tone {PAPER_ID[p]} {k}%"; f = k / 100.0
-            open(os.path.join(d, name + ".costyle"), "w").write(_sl(name, [
-                f'\t<E K="BwDarkHue" V="{st["dark"][0]}" />', f'\t<E K="BwDarkSaturation" V="{round(st["dark"][1] * f, 1)}" />',
-                '\t<E K="BwEnabled" V="1" />', f'\t<E K="BwLightHue" V="{st["light"][0]}" />',
-                f'\t<E K="BwLightSaturation" V="{round(st["light"][1] * f, 1)}" />'])); n += 1
-    open(os.path.join(d, "Tone off.costyle"), "w").write(_sl("Tone off", [
-        '\t<E K="BwDarkSaturation" V="0" />', '\t<E K="BwLightSaturation" V="0" />'])); n += 1
-    print(n, "toning styles in", d)
-
-# Detail: sharpening off. Capture One sharpens before the paper curves; film has no
-# digital sharpening. Only the amount is set; radius, threshold and halo stay the user's.
-DETAIL_FOLDER = "5 Detail"
-def write_detail(out):
-    d = os.path.join(out, DETAIL_FOLDER); os.makedirs(d, exist_ok=True)
-    open(os.path.join(d, "Sharpening off.costyle"), "w").write(_sl("Sharpening off", ['\t<E K="UsmAmount" V="0" />']))
-    print("1 detail style in", d)
 
 if __name__ == "__main__":
     main(*sys.argv[1:])

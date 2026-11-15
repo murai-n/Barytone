@@ -283,8 +283,6 @@ Capture One の Film Curves フォルダ（`.fcrv`）からその量を機種ご
 | `2 Coupler/` | 4 |
 | `3 Paper/Color/` | 16（印画紙 8 種 × normal / faded） |
 | `3 Paper/B&W/` | 28（印画紙 4 種 × 号数 00〜5） |
-| `3 Paper/B&W Toning/` | 10（IFW・ICT・IMR の紙の色 × 25 / 50 / 100%、Tone off） |
-| `5 Detail/` | 1（Sharpening off） |
 | `4 Filter/` | 6 |
 
 スタイルはいずれもカメラに依存しない。**カメラプロファイルは配布物に含めない**：利用者が
