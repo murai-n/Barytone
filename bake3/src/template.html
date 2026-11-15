@@ -195,7 +195,7 @@ ul.plain > li + li { margin-top: calc(6 / 16 * 1rem); }
             <ul class="dads-file-upload__error-messages" id="upload-errors"></ul>
           </div>
           <p class="dads-file-upload__empty-message" id="empty-message">まだ何も選ばれていません</p>
-          <p class="ev-lead" id="ev-lead" hidden>適正なプリントを再現できるように、カメラごとに露出のオフセットを入れられます。値はカメラの機種から自動で入ります。使わないカメラはチェックを外してください。</p>
+          <p class="ev-lead" id="ev-lead" hidden>適正なプリントを再現できるように、カメラごとに露出のオフセットを入れられます。値はカメラの機種から自動で入り、Film フォルダに「Exposure」スタイルとして入ります。最初に1回当てれば、フィルムを切り替えても露出は変わりません。使わないカメラはチェックを外してください。</p>
           <ul class="dads-file-upload__file-list" id="file-list" hidden></ul>
         </div>
       </div>
@@ -301,7 +301,7 @@ ul.plain > li + li { margin-top: calc(6 / 16 * 1rem); }
     </ol>
     <p class="note" style="margin-top: calc(16 / 16 * 1rem);">スタイルはプロファイルを名前で参照しています。ICCプロファイルを所定のフォルダに配置し再起動すると選択可能になります。</p>
     <p class="note">リバーサルはコントラストが強いため、暗く感じたら露出を +0.3〜0.5 ほど上げてください。</p>
-    <p class="note">モノクロ（IHP5、KTX400 など）のプロファイルはネガの段階までで、それだけでは平坦な調子になります。キットの <code>3 Paper (B&amp;W)</code> にある印画紙スタイル（印画紙 4 種 × 号数 00〜5）を重ねて、焼きの調子を選んでください。見本は MGIV RC 2 号で焼いた場合です。</p>
+    <p class="note">モノクロ（IHP5、KTX400 など）のプロファイルはネガの段階までで、それだけでは平坦な調子になります。キットの <code>3 Paper/B&amp;W</code> にある印画紙スタイル（印画紙 4 種 × 号数 00〜5）を重ねて、焼きの調子を選んでください。見本は MGIV RC 2 号で焼いた場合です。</p>
   </section>
 
   <footer class="footer">

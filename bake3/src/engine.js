@@ -207,11 +207,11 @@
     var fb = v.bpaper ? baseRender(C, film, film.variants[0], xyz) : xyz;
     return [w * o[0] * s + (1 - w) * fb[0], w * o[1] * s + (1 - w) * fb[1], w * o[2] * s + (1 - w) * fb[2]];
   }
-  /* Black and white: the ICC is the negative only (film + contrast filter).
-     The filter is already inside v.mk, so it acts on the spectrum before the
-     emulsion integrates it.  The negative's density relative to mid-grey is
-     written linearly into Capture One's curve domain (linear ** 1/ENC); paper
-     and grade are a curve style on top.  Output is neutral (a = b = 0). */
+  /* Black and white: the ICC is the film (+ contrast filter, already inside
+     v.mk, so it acts on the spectrum before the emulsion integrates it) shown as
+     a soft reference print: the negative's density relative to mid-grey goes
+     through the reference table (mono.REF_V), so no paper-grade curve on top is
+     steeper than about 2.  Output is neutral (a = b = 0). */
   function monoRender(C, film, v, xyz) {
     var S = spectrum(C, xyz), k = v.mk, H = 0, P = C.MONO;
     for (var i = 0; i < S.length; i++) H += S[i] * k[i];
@@ -219,12 +219,23 @@
     var xs = film.x, lo = xs[0], hi = xs[xs.length - 1];
     var pos = Math.min(Math.max(film.sp + P.METER_LOG + Math.log10(H / C.GRAY), lo), hi);   /* metered grey above the speed point (mono.METER_LOG) */
     var u = film.ref - interp(pos, xs, film.d);
-    var val = Math.min(Math.max(P.V_MID - u / P.NEG_SPAN, 0), 1), Y = Math.pow(val, P.ENC), w = C.D65W;
+    var val = interp(u, P.REF.u, P.REF.v), Y = Math.pow(val, P.ENC), w = C.D65W;   /* the reference print (mono.icc_value) */
     return [Y * w[0], Y * w[1], Y * w[2]];
+  }
+  /* A look baked on top of the film data (film.sat, e.g. Portra VC): chroma
+     scaled in CIELAB (D65 white), lightness and hue kept, so greys - and the
+     Develop and Paper curves built on them - are unchanged. */
+  function saturate(C, X, s) {
+    var w = C.D65W;
+    function f(t) { return t > E_ ? Math.cbrt(t) : (K_ * t + 16) / 116; }
+    function fi(t) { var t3 = t * t * t; return t3 > E_ ? t3 : (116 * t - 16) / K_; }
+    var fx = f(X[0] / w[0]), fy = f(X[1] / w[1]), fz = f(X[2] / w[2]);
+    var a = 500 * (fx - fy) * s, b = 200 * (fy - fz) * s;
+    return [fi(fy + a / 500) * w[0], X[1], fi(fy - b / 200) * w[2]];
   }
   function renderXYZ(C, film, v, xyz) {
     if (film.kind === "mono") return monoRender(C, film, v, xyz);
-    if (v.base) return baseRender(C, film, v, xyz);
+    if (v.base) return film.sat ? saturate(C, baseRender(C, film, v, xyz), film.sat) : baseRender(C, film, v, xyz);
     var H = exposures(film, spectrum(C, xyz));
     if (v.paper) return viewAdapt(C, printRender(C, film, v, H), "print");
     return film.kind === "neg" ? negRender(C, film, v, H) : viewAdapt(C, posRender(C, film, v, H), "slide");
@@ -357,13 +368,22 @@
     for (i = 0; i < 16; i++) h.push((b[i] + 0x100).toString(16).slice(1).toUpperCase());
     return h.slice(0, 4).join("") + "-" + h.slice(4, 6).join("") + "-" + h.slice(6, 8).join("") + "-" + h.slice(8, 10).join("") + "-" + h.slice(10, 16).join("");
   }
-  /* exposure offset in stops, written into the style so Capture One lifts the raw
-     the way its default curve would (Linear Response drops that lift) */
+  /* exposure offset in stops: Capture One lifts the raw with its default curve and
+     Linear Response drops that lift, so this puts it back */
   function evStr(v) { v = +v || 0; return (Math.round(v * 100) / 100).toString(); }
+  /* the camera's exposure offset as a style of its own, applied once: kept out of
+     the Film styles so switching films never resets an exposure set by hand */
+  function exposureStyle(ev, name) {
+    return ['<?xml version="1.0"?>', '<SL Engine="1300">',
+      '\t<E K="Exposure" V="' + evStr(ev) + '" />',
+      '\t<E K="Name" V="' + xmlEsc(name) + '" />',
+      '\t<E K="StyleSource" V="Styles" />',
+      '\t<E K="UUID" V="' + uuid4() + '" />',
+      "</SL>", ""].join("\n");
+  }
   function costyle(film, opts) {
     /* black and white: the ICC alone is the film; paper and grade are separate styles */
     if (film.kind === "mono") return ['<?xml version="1.0"?>', '<SL Engine="1300">',
-      opts.ev != null ? '\t<E K="Exposure" V="' + evStr(opts.ev) + '" />' : null,
       '\t<E K="FilmCurve" V="' + xmlEsc(opts.filmCurve) + '" />',
       '\t<E K="ICCProfile" V="' + xmlEsc(opts.icc) + '" />',
       '\t<E K="Name" V="' + xmlEsc(opts.name) + '" />',
@@ -397,7 +417,6 @@
       '\t\t\t\t<E K="MaskType" V="1" />',
       "\t\t\t</MD>", "\t\t</LD>"].join("\n");
     return ['<?xml version="1.0"?>', '<SL Engine="1300">',
-      opts.ev != null ? '\t<E K="Exposure" V="' + evStr(opts.ev) + '" />' : null,
       '\t<E K="FilmCurve" V="' + xmlEsc(opts.filmCurve) + '" />',
       '\t<E K="FilmGrainAmount" V="0" />',
       '\t<E K="FilmGrainDensity" V="0" />',
@@ -440,5 +459,5 @@
     return out;
   }
 
-  root.FilmBaker = { inspect: inspect, bake: bake, zip: zip, costyle: costyle, filmLinear: filmLinear, renderXYZ: renderXYZ, BakeError: BakeError };
+  root.FilmBaker = { inspect: inspect, bake: bake, zip: zip, costyle: costyle, exposureStyle: exposureStyle, filmLinear: filmLinear, renderXYZ: renderXYZ, BakeError: BakeError };
 })(typeof window !== "undefined" ? window : globalThis);

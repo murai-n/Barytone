@@ -9,7 +9,7 @@ OUT="/home/claude/presets/"; shutil.rmtree(OUT,ignore_errors=True)
 FILM_IND="Film (Camera-specific)"   # per-camera: references the baked NikonZ5 ICC
 FILM_GEN="Film (General)"           # generic: references the camera-agnostic ICC (works on any camera)
 ICC_IND="ICC (Camera-specific)"; ICC_GEN="ICC (General)"
-for d in (FILM_IND,FILM_GEN,"3 Paper","2 Coupler",ICC_IND,ICC_GEN):
+for d in (FILM_IND,FILM_GEN,"3 Paper/Color","2 Coupler",ICC_IND,ICC_GEN):
     os.makedirs(OUT+d,exist_ok=True)
 ALIAS=json.load(open("/home/claude/out3/alias.json"))["alias"]
 PAPERS=[("endura","KEP"),("crystal","FCA"),("fujiflex","FFX"),("metallic","KEM"),("ultra","KUE"),("portra","KPE"),("supra","KSE"),("ilfochrome","ILF")]
@@ -111,7 +111,7 @@ for pid,lab in PAPERS:
             '\t<E K="StyleSource" V="Styles" />',
             f'\t<E K="UUID" V="{uid()}" />','</SL>',
             '<LDS>',layers,'</LDS>',''])   # SL carries no base-characteristics -> applying never touches the film ICC
-        open(OUT+f"3 Paper/Paper {lab} ({suf}).costyle","w").write(xml)
+        open(OUT+f"3 Paper/Color/Paper {lab} ({suf}).costyle","w").write(xml)
 
 # ---------- Coupler (shared, saturation) ----------
 for s in (15,30,40,50):
@@ -129,6 +129,6 @@ for nm in ("+10Y","-10Y","+10M","-10M","+10C","-10C"):
     xml="\n".join(['<?xml version="1.0"?>','<SL Engine="1300">',f'\t<E K="Name" V="Filter {nm}" />',
         '\t<E K="StyleSource" V="Styles" />',f'\t<E K="UUID" V="{uid()}" />','</SL>','<LDS>',rgb_layer(f"Filter {nm}",c),'</LDS>',''])
     open(OUT+f"4 Filter/Filter {nm}.costyle","w").write(xml)
-print("Film Camera:",len(os.listdir(OUT+FILM_IND)),"| Film General:",len(os.listdir(OUT+FILM_GEN)),"| Paper:",len(os.listdir(OUT+"3 Paper")),"| Coupler:",len(os.listdir(OUT+"2 Coupler")),"| ICC Camera:",len(os.listdir(OUT+ICC_IND)),"| ICC General:",len(os.listdir(OUT+ICC_GEN)))
+print("Film Camera:",len(os.listdir(OUT+FILM_IND)),"| Film General:",len(os.listdir(OUT+FILM_GEN)),"| Paper:",len(os.listdir(OUT+"3 Paper/Color")),"| Coupler:",len(os.listdir(OUT+"2 Coupler")),"| ICC Camera:",len(os.listdir(OUT+ICC_IND)),"| ICC General:",len(os.listdir(OUT+ICC_GEN)))
 # ---------- Black-and-white papers (camera-independent): 4 papers x grades 00-5 ----------
 import styles_mono; styles_mono.main(OUT)

@@ -34,21 +34,35 @@ def classify_by_letters(polys, lets):
 OUT = {}
 
 # ================= KODAK PORTRA 160NC / 160VC / 400NC / 400VC (E-190, 2006) =========
-# One template across pages 8-11, so the same anchors serve all four films.
+# One template across pages 8-11, but the pages do not place it at the same spot:
+# the VC pages sit 12 pt right of the NC pages, and pages 9-11 sit 16 pt higher
+# than page 8.  Using page 8's anchors on every page put the VC spectral curves
+# 30 nm too far to the red (blue layer peaking at 500 nm), which pushed reds and
+# skin toward yellow.  Each page is now located by its own tick labels.
 PORTRA = [("Portra 160NC", 7, 160), ("Portra 160VC", 8, 160),
           ("Portra 400NC", 9, 400), ("Portra 400VC", 10, 400)]
+def portra_offset(p):
+    """(dx, dy) of this page's chart block relative to page 8 (index 7), from the
+    '250' wavelength label (x) and the top '4.0' density label of the
+    characteristic-curve panel (y)."""
+    ws = p.extract_words()
+    x250 = [(w["x0"] + w["x1"]) / 2 for w in ws if w["text"] == "250" and w["top"] > 400]
+    y40 = [(w["top"] + w["bottom"]) / 2 for w in ws if w["text"] == "4.0" and w["x0"] < 80 and w["top"] < 120]
+    assert len(x250) == 1 and len(y40) == 1, (x250, y40)
+    return x250[0] - 75.3, y40[0] - 92.7
 pdf = pdfplumber.open(U + "2e719031-e190-Portra-2006.pdf")
 for name, pi, iso in PORTRA:
-    p = pdf.pages[pi]; H = p.height
-    xm = lambda c: lin(c, 74.5, -4.0, 258.2, 1.0)
-    ym = lambda c: lin(c, 92.7, 4.0, 277.6, 0.0)
-    polys = [a for a in chain(pick(p, 70, 88, 335, 285, minw=80), H) if a.shape[0] > 20]
-    lets = letters(p, 70, 88, 340, 287); cl = classify_by_letters(polys, lets)
+    p = pdf.pages[pi]; H = p.height; dx, dy = portra_offset(p)
+    xm = lambda c: lin(c, 74.5 + dx, -4.0, 258.2 + dx, 1.0)
+    ym = lambda c: lin(c, 92.7 + dy, 4.0, 277.6 + dy, 0.0)
+    polys = [a for a in chain(pick(p, 70 + dx, 88 + dy, 335 + dx, 285 + dy, minw=80), H) if a.shape[0] > 20]
+    lets = letters(p, 70 + dx, 88 + dy, 340 + dx, 287 + dy); cl = classify_by_letters(polys, lets)
     assert set(cl) == {"R", "G", "B"}, (name, len(polys), lets)
     ch = {t: dict(zip(("x", "d"), tidy(xm(polys[i][:, 0]), ym(polys[i][:, 1])))) for t, i in cl.items()}
-    sx = lambda c: lin(c, 75.3, 250.0, 275.8, 750.0)
-    sy = lambda c: lin(c, 336.7, 4.0, 486.2, 0.0)
-    sens = sens_extract(p, (70, 330, 335, 495), sx, sy)
+    sx = lambda c: lin(c, 75.3 + dx, 250.0, 275.8 + dx, 750.0)
+    sy = lambda c: lin(c, 336.7 + dy, 4.0, 486.2 + dy, 0.0)
+    sens = sens_extract(p, (70 + dx, 330 + dy, 335 + dx, 495 + dy), sx, sy)
+    print(f"{name}: page offset dx {dx:+.1f} dy {dy:+.1f}")
     OUT[name] = dict(kind="neg", iso=iso, ch=ch, sens=sens)
     print(f"{name}: ch", {k: len(v["x"]) for k, v in ch.items()},
           "sens", {k: len(v["wl"]) for k, v in sens.items()})

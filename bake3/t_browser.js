@@ -98,7 +98,7 @@ const ok = (label, cond, extra) => { (cond ? pass++ : fail++); console.log((cond
   const buf = fs.readFileSync(T + "/out.zip");
   let entries = 0;
   for (let i = 0; i < buf.length - 4; i++) if (buf[i] === 0x50 && buf[i + 1] === 0x4b && buf[i + 2] === 3 && buf[i + 3] === 4) entries++;
-  ok("zip holds 75 profiles and 75 styles", entries === 150, entries + " entries, " + buf.length + " bytes");
+  ok("zip holds 75 profiles, 75 styles and the Exposure style", entries === 151, entries + " entries, " + buf.length + " bytes");
   ok("profiles are under NikonZ5-film-profiles/ICC (Nikon Z5)/", buf.includes(Buffer.from("NikonZ5-film-profiles/ICC (Nikon Z5)/NikonZ5-Film KP400 base.icm")));
   ok("styles are under NikonZ5-film-profiles/1 Film (Nikon Z5)/Negative/", buf.includes(Buffer.from("NikonZ5-film-profiles/1 Film (Nikon Z5)/Negative/Film KP400 (Nikon Z5).costyle")));
   {
@@ -107,7 +107,9 @@ const ok = (label, cond, extra) => { (cond ? pass++ : fail++); console.log((cond
     const sty = fs.readFileSync(T + "/unz/NikonZ5-film-profiles/1 Film (Nikon Z5)/Negative/Film KP400 (Nikon Z5).costyle", "utf8");
     ok("style points at the matching ICC", sty.includes('K="ICCProfile" V="NikonZ5-Film KP400 base.icm"'));
     ok("style sets the camera's linear curve", sty.includes('K="FilmCurve" V="NikonZ5-Linear Response.fcrv"'));
-    ok("style carries the camera's exposure offset", sty.includes('K="Exposure" V="1.25"'));
+    ok("film styles leave the exposure alone", !sty.includes('K="Exposure"'));
+    { const ex = T + "/unz/NikonZ5-film-profiles/1 Film (Nikon Z5)/Exposure +1.25 (Nikon Z5).costyle";
+      ok("the camera's offset is its own Exposure style", fs.existsSync(ex) && fs.readFileSync(ex, "utf8").includes('K="Exposure" V="1.25"')); }
     ok("style carries the develop layer", sty.includes('K="Name" V="Develop KP400 - color"') && sty.includes("<LDS>"));
     { const pos = fs.readFileSync(T + "/unz/NikonZ5-film-profiles/1 Film (Nikon Z5)/Positive/Film FV50 (Nikon Z5).costyle", "utf8"); ok("positive styles carry the slide tone layer", pos.includes("Develop FV50 - slide tone") && (pos.match(/<LD>/g)||[]).length === 2); ok("negative styles stay single-layer", (sty.match(/<LD>/g)||[]).length === 1); }
     { const dir = T + "/unz/NikonZ5-film-profiles/1 Film (Nikon Z5)/B&W/", ms = fs.readFileSync(dir + "Film IHP5 R (Nikon Z5).costyle", "utf8"), mb = fs.readFileSync(dir + "Film IHP5 (Nikon Z5).costyle", "utf8");
@@ -115,7 +117,7 @@ const ok = (label, cond, extra) => { (cond ? pass++ : fail++); console.log((cond
       ok("mono styles carry no develop layer", !ms.includes("<LDS>") && ms.includes('K="FilmCurve" V="NikonZ5-Linear Response.fcrv"'));
       ok("mono ICC is in the ICC folder", fs.existsSync(T + "/unz/NikonZ5-film-profiles/ICC (Nikon Z5)/NikonZ5-Film KTX400 G.icm")); }
     ok("style has a real uuid", /K="UUID" V="[0-9A-F]{8}-[0-9A-F]{4}-4[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}"/.test(sty));
-    const FD = T + "/unz/NikonZ5-film-profiles/1 Film (Nikon Z5)/", kinds = fs.readdirSync(FD).sort(), styles = [].concat(...kinds.map(k => fs.readdirSync(FD + k).map(f => FD + k + "/" + f)));
+    const FD = T + "/unz/NikonZ5-film-profiles/1 Film (Nikon Z5)/", kinds = fs.readdirSync(FD, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name).sort(), styles = [].concat(...kinds.map(k => fs.readdirSync(FD + k).map(f => FD + k + "/" + f)));
     ok("Film folder splits into Negative / Positive / B&W", JSON.stringify(kinds) === '["B&W","Negative","Positive"]' && JSON.stringify(kinds.map(k => fs.readdirSync(FD + k).length)) === "[45,18,12]", JSON.stringify(kinds.map(k => [k, fs.readdirSync(FD + k).length])));
     const n = fs.readdirSync(T + "/unz/NikonZ5-film-profiles/ICC (Nikon Z5)").length, m = styles.length;
     ok("both folders unzip cleanly", n === 75 && m === 75, n + " icc, " + m + " styles");
@@ -179,9 +181,9 @@ const ok = (label, cond, extra) => { (cond ? pass++ : fail++); console.log((cond
     ok("one folder pair per camera", JSON.stringify(top) === JSON.stringify(["1 Film (Nikon Z5)", "1 Film (Sony ILCE-7M4)", "ICC (Nikon Z5)", "ICC (Sony ILCE-7M4)"]), JSON.stringify(top));
     const cnt = d => fs.readdirSync(d, { withFileTypes: true }).reduce((n, e) => n + (e.isDirectory() ? cnt(d + "/" + e.name) : 1), 0);
     const counts = top.map(d => cnt(T + "/unz2/film-profiles/" + d));
-    ok("75 files in each", counts.every(c => c === 75), JSON.stringify(counts));
+    ok("75 ICCs, and 75 film styles + 1 Exposure style, per camera", JSON.stringify(counts) === "[76,76,75,75]", JSON.stringify(counts));
     const sony = fs.readFileSync(T + "/unz2/film-profiles/1 Film (Sony ILCE-7M4)/Negative/Film KP400 (Sony ILCE-7M4).costyle", "utf8");
-    ok("each camera's style carries its own exposure", sony.includes('K="Exposure" V="1.5"') && fs.readFileSync(T + "/unz2/film-profiles/1 Film (Nikon Z5)/Negative/Film KP400 (Nikon Z5).costyle", "utf8").includes('K="Exposure" V="1.25"'));
+    ok("each camera gets its own Exposure style", fs.readFileSync(T + "/unz2/film-profiles/1 Film (Sony ILCE-7M4)/Exposure +1.50 (Sony ILCE-7M4).costyle", "utf8").includes('K="Exposure" V="1.5"') && fs.readFileSync(T + "/unz2/film-profiles/1 Film (Nikon Z5)/Exposure +1.25 (Nikon Z5).costyle", "utf8").includes('K="Exposure" V="1.25"') && !sony.includes('K="Exposure"'));
     ok("each camera's styles point at its own ICC and curve", sony.includes('V="SonyILCE-7M4-Film KP400 base.icm"') && sony.includes('V="SonyILCE-7M4-Linear Response.fcrv"'));
     const a = fs.readFileSync(T + "/unz2/film-profiles/ICC (Nikon Z5)/NikonZ5-Film KP400 base.icm"), b = fs.readFileSync(T + "/unz2/film-profiles/ICC (Sony ILCE-7M4)/SonyILCE-7M4-Film KP400 base.icm");
     ok("each camera's ICC carries its own name", a.includes(Buffer.from("NikonZ5-Film KP400 base")) && b.includes(Buffer.from("SonyILCE-7M4-Film KP400 base")));
@@ -218,7 +220,7 @@ const ok = (label, cond, extra) => { (cond ? pass++ : fail++); console.log((cond
     execSync(`rm -rf "${T}/unz3" && mkdir -p "${T}/unz3" && cd "${T}/unz3" && unzip -q ../out3.zip`);
     const top3 = fs.readdirSync(T + "/unz3")[0], dir3 = T + "/unz3/" + top3 + "/" + fs.readdirSync(T + "/unz3/" + top3).find(n => /^1 Film/.test(n));
     const st3 = fs.readFileSync(dir3 + "/Negative/" + fs.readdirSync(dir3 + "/Negative")[0], "utf8"), mo3 = fs.readFileSync(dir3 + "/B&W/" + fs.readdirSync(dir3 + "/B&W")[0], "utf8");
-    ok("offset off: no Exposure in colour or B&W styles", !st3.includes('K="Exposure"') && !mo3.includes('K="Exposure"') && st3.includes('K="ICCProfile"'));
+    ok("offset off: no Exposure style, and none in the film styles", !fs.readdirSync(dir3).some(n => /^Exposure/.test(n)) && !st3.includes('K="Exposure"') && !mo3.includes('K="Exposure"') && st3.includes('K="ICCProfile"'));
     await page.waitForSelector("#done-banner:not([hidden])", { timeout: 10000 });
     ok("my cameras show the offset as off", /露出オフセット オフ/.test((await page.locator("#mycam-list .hit-rest").allTextContents()).join("|")), (await page.locator("#mycam-list .hit-rest").allTextContents()).join("|"));
   }
