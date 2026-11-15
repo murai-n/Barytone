@@ -51,6 +51,8 @@ body[data-os="mac"] [data-os="win"], body[data-os="win"] [data-os="mac"] { displ
 .hit[aria-pressed="true"] { background: var(--color-primitive-blue-50, #e8f1fe); box-shadow: inset calc(4 / 16 * 1rem) 0 0 var(--color-primitive-blue-900); }
 .hit-cam { font-weight: 700; overflow-wrap: anywhere; }
 .ev-row { margin: calc(4 / 16 * 1rem) 0 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: calc(4 / 16 * 1rem) calc(12 / 16 * 1rem); }
+.ev-lead { margin: calc(16 / 16 * 1rem) 0 0; }
+.ev-on { display: inline-flex; align-items: center; gap: calc(4 / 16 * 1rem); }
 .ev-input { width: 6em; font: inherit; padding: calc(2 / 16 * 1rem) calc(6 / 16 * 1rem); border: 1px solid var(--color-neutral-solid-gray-600); border-radius: calc(4 / 16 * 1rem); }
 .ev-note { color: var(--color-neutral-solid-gray-600); font-size: calc(14 / 16 * 1rem); }
 .mycam-row { display: flex; align-items: stretch; }
@@ -193,6 +195,7 @@ ul.plain > li + li { margin-top: calc(6 / 16 * 1rem); }
             <ul class="dads-file-upload__error-messages" id="upload-errors"></ul>
           </div>
           <p class="dads-file-upload__empty-message" id="empty-message">まだ何も選ばれていません</p>
+          <p class="ev-lead" id="ev-lead" hidden>適正なプリントを再現できるように、カメラごとに露出のオフセットを入れられます。値はカメラの機種から自動で入ります。使わないカメラはチェックを外してください。</p>
           <ul class="dads-file-upload__file-list" id="file-list" hidden></ul>
         </div>
       </div>

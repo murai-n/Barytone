@@ -363,13 +363,13 @@
   function costyle(film, opts) {
     /* black and white: the ICC alone is the film; paper and grade are separate styles */
     if (film.kind === "mono") return ['<?xml version="1.0"?>', '<SL Engine="1300">',
-      '\t<E K="Exposure" V="' + evStr(opts.ev) + '" />',
+      opts.ev != null ? '\t<E K="Exposure" V="' + evStr(opts.ev) + '" />' : null,
       '\t<E K="FilmCurve" V="' + xmlEsc(opts.filmCurve) + '" />',
       '\t<E K="ICCProfile" V="' + xmlEsc(opts.icc) + '" />',
       '\t<E K="Name" V="' + xmlEsc(opts.name) + '" />',
       '\t<E K="StyleSource" V="Styles" />',
       '\t<E K="UUID" V="' + uuid4() + '" />',
-      "</SL>", ""].join("\n");
+      "</SL>", ""].filter(function (l) { return l !== null; }).join("\n");
     var d = film.dev;
     if (!d) throw new BakeError("no_curves", "このフィルムにはスタイル用のカーブがありません。");
     var layer = ["\t\t<LD>", "\t\t\t<LA>",
@@ -397,7 +397,7 @@
       '\t\t\t\t<E K="MaskType" V="1" />',
       "\t\t\t</MD>", "\t\t</LD>"].join("\n");
     return ['<?xml version="1.0"?>', '<SL Engine="1300">',
-      '\t<E K="Exposure" V="' + evStr(opts.ev) + '" />',
+      opts.ev != null ? '\t<E K="Exposure" V="' + evStr(opts.ev) + '" />' : null,
       '\t<E K="FilmCurve" V="' + xmlEsc(opts.filmCurve) + '" />',
       '\t<E K="FilmGrainAmount" V="0" />',
       '\t<E K="FilmGrainDensity" V="0" />',
@@ -410,7 +410,7 @@
       '\t<E K="Shadow" V="0;0;0;0" />',
       '\t<E K="StyleSource" V="Styles" />',
       '\t<E K="UUID" V="' + uuid4() + '" />',
-      "</SL>", "<LDS>", layer, "</LDS>", ""].join("\n");
+      "</SL>", "<LDS>", layer, "</LDS>", ""].filter(function (l) { return l !== null; }).join("\n");
   }
 
   function zip(files) {
