@@ -210,7 +210,7 @@ Y・O・R・G。
 
 | パス | 中身 |
 |---|---|
-| `scripts/` | モデルと生成パイプライン（`model3.py`、`styles.py`、`presets.py`、`export4.py`、`build3.py`、`mono.py`、`spec3.py`、`export_mono.py`、`check_mono_icc.py`、`test_profile.py`、`styles_mono.py`） |
+| `scripts/` | モデルと生成パイプライン（`model3.py`、`styles.py`、`presets.py`、`export4.py`、`build3.py`、`mono.py`、`spec3.py`、`export_mono.py`、`check_mono_icc.py`、`test_profile.py`、`styles_mono.py`、`camera_ev.py`） |
 | `ds/` | digitize 済みデータと抽出スクリプト |
 | `m3/` | 色素・分光の基礎データ |
 | `paper/` | 印画紙データ |
@@ -235,6 +235,17 @@ Y・O・R・G。
 プロファイルの代わりで、焼き込みと LittleCMS での読み戻しを試すためのもの。
 LittleCMS は Lab 系の入力プロファイルで機器の白を紙の白に寄せる補正をかけるので、
 検証ではこれを切っている（`cmsFLAGS_NOWHITEONWHITEFIXUP`）。
+
+### 機種ごとの露光補正
+
+Capture One は既定のカーブ（Film Standard）で中間グレーを持ち上げており、キットが使う
+Linear Response ではそれが消えて、機種によって 0〜1.9 EV 暗くなる。`scripts/camera_ev.py` は
+Capture One の Film Curves フォルダ（`.fcrv`）からその量を機種ごとに計算し、`ds/camera_ev.json` に
+数値だけを書く（`.fcrv` そのものは置かない）。`export_mono.py` がそれを `films.json` に入れ、
+焼き込みツールは選んだカメラの値を Film スタイルの `Exposure` に書く。詳細は `HANDOVER.md`。
+
+    python3 scripts/camera_ev.py "/path/to/Capture One 23/Film Curves"
+    python3 scripts/export_mono.py
 
 ### データ抽出のしかた
 

@@ -357,9 +357,13 @@
     for (i = 0; i < 16; i++) h.push((b[i] + 0x100).toString(16).slice(1).toUpperCase());
     return h.slice(0, 4).join("") + "-" + h.slice(4, 6).join("") + "-" + h.slice(6, 8).join("") + "-" + h.slice(8, 10).join("") + "-" + h.slice(10, 16).join("");
   }
+  /* exposure offset in stops, written into the style so Capture One lifts the raw
+     the way its default curve would (Linear Response drops that lift) */
+  function evStr(v) { v = +v || 0; return (Math.round(v * 100) / 100).toString(); }
   function costyle(film, opts) {
     /* black and white: the ICC alone is the film; paper and grade are separate styles */
     if (film.kind === "mono") return ['<?xml version="1.0"?>', '<SL Engine="1300">',
+      '\t<E K="Exposure" V="' + evStr(opts.ev) + '" />',
       '\t<E K="FilmCurve" V="' + xmlEsc(opts.filmCurve) + '" />',
       '\t<E K="ICCProfile" V="' + xmlEsc(opts.icc) + '" />',
       '\t<E K="Name" V="' + xmlEsc(opts.name) + '" />',
@@ -393,6 +397,7 @@
       '\t\t\t\t<E K="MaskType" V="1" />',
       "\t\t\t</MD>", "\t\t</LD>"].join("\n");
     return ['<?xml version="1.0"?>', '<SL Engine="1300">',
+      '\t<E K="Exposure" V="' + evStr(opts.ev) + '" />',
       '\t<E K="FilmCurve" V="' + xmlEsc(opts.filmCurve) + '" />',
       '\t<E K="FilmGrainAmount" V="0" />',
       '\t<E K="FilmGrainDensity" V="0" />',

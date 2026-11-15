@@ -86,6 +86,8 @@ const ok = (label, cond, extra) => { (cond ? pass++ : fail++); console.log((cond
   ok("folder names on the page follow the camera", (await page.locator(".icc-dir").first().textContent()) === "ICC (Nikon Z5)", await page.locator(".icc-dir").first().textContent());
   ok("summary names the camera and the count", /75種類/.test(sum) && /NikonZ5-Film /.test(sum) && /costyle/.test(sum), sum);
   ok("run button enabled", await page.locator("#run-button").isEnabled());
+  ok("Z5 gets its exposure offset from the table", (await page.locator("#file-list .ev-input").inputValue()) === "1.25" && /標準カーブ/.test(await page.locator("#file-list .ev-note").textContent()), await page.locator("#file-list .ev-input").inputValue());
+  ok("summary states the exposure", /露光の補正（\+1\.25 EV）/.test(await page.locator("#summary").textContent()), await page.locator("#summary").textContent());
 
   /* --- bake everything --- */
   const dl = page.waitForEvent("download", { timeout: 120000 });
@@ -105,6 +107,7 @@ const ok = (label, cond, extra) => { (cond ? pass++ : fail++); console.log((cond
     const sty = fs.readFileSync(T + "/unz/NikonZ5-film-profiles/1 Film (Nikon Z5)/Negative/Film KP400 (Nikon Z5).costyle", "utf8");
     ok("style points at the matching ICC", sty.includes('K="ICCProfile" V="NikonZ5-Film KP400 base.icm"'));
     ok("style sets the camera's linear curve", sty.includes('K="FilmCurve" V="NikonZ5-Linear Response.fcrv"'));
+    ok("style carries the camera's exposure offset", sty.includes('K="Exposure" V="1.25"'));
     ok("style carries the develop layer", sty.includes('K="Name" V="Develop KP400 - color"') && sty.includes("<LDS>"));
     { const pos = fs.readFileSync(T + "/unz/NikonZ5-film-profiles/1 Film (Nikon Z5)/Positive/Film FV50 (Nikon Z5).costyle", "utf8"); ok("positive styles carry the slide tone layer", pos.includes("Develop FV50 - slide tone") && (pos.match(/<LD>/g)||[]).length === 2); ok("negative styles stay single-layer", (sty.match(/<LD>/g)||[]).length === 1); }
     { const dir = T + "/unz/NikonZ5-film-profiles/1 Film (Nikon Z5)/B&W/", ms = fs.readFileSync(dir + "Film IHP5 R (Nikon Z5).costyle", "utf8"), mb = fs.readFileSync(dir + "Film IHP5 (Nikon Z5).costyle", "utf8");
@@ -157,6 +160,13 @@ const ok = (label, cond, extra) => { (cond ? pass++ : fail++); console.log((cond
   await page.waitForTimeout(400);
   picked = await page.locator("#file-list .dads-file-upload__file-name").allTextContents();
   ok("clicking a picked hit unpicks it", picked.length === 2 && !picked.some(n => /EOSR5/.test(n)), JSON.stringify(picked));
+  {
+    const evs = page.locator("#file-list .ev-input"), notes = page.locator("#file-list .ev-note");
+    ok("Sony ILCE name finds its curve (A7M4)", (await evs.nth(1).inputValue()) === "1.27" && /標準カーブ/.test(await notes.nth(1).textContent()), await evs.nth(1).inputValue() + " " + await notes.nth(1).textContent());
+    await evs.nth(1).fill("1.5"); await evs.nth(1).dispatchEvent("change");
+    await page.waitForTimeout(200);
+    ok("a typed offset is kept and marked", (await evs.nth(1).inputValue()) === "1.50" && /手で変えた/.test(await notes.nth(1).textContent()));
+  }
   ok("summary names both cameras", /2台のカメラ（Nikon Z5、Sony ILCE-7M4）/.test(await page.locator("#summary").textContent()), await page.locator("#summary").textContent());
   ok("run button says how many", (await page.locator("#run-button").textContent()).trim() === "2台分のICCプロファイルを作成してダウンロード");
   {
@@ -172,6 +182,7 @@ const ok = (label, cond, extra) => { (cond ? pass++ : fail++); console.log((cond
     const counts = top.map(d => cnt(T + "/unz2/film-profiles/" + d));
     ok("75 files in each", counts.every(c => c === 75), JSON.stringify(counts));
     const sony = fs.readFileSync(T + "/unz2/film-profiles/1 Film (Sony ILCE-7M4)/Negative/Film KP400 (Sony ILCE-7M4).costyle", "utf8");
+    ok("each camera's style carries its own exposure", sony.includes('K="Exposure" V="1.5"') && fs.readFileSync(T + "/unz2/film-profiles/1 Film (Nikon Z5)/Negative/Film KP400 (Nikon Z5).costyle", "utf8").includes('K="Exposure" V="1.25"'));
     ok("each camera's styles point at its own ICC and curve", sony.includes('V="SonyILCE-7M4-Film KP400 base.icm"') && sony.includes('V="SonyILCE-7M4-Linear Response.fcrv"'));
     const a = fs.readFileSync(T + "/unz2/film-profiles/ICC (Nikon Z5)/NikonZ5-Film KP400 base.icm"), b = fs.readFileSync(T + "/unz2/film-profiles/ICC (Sony ILCE-7M4)/SonyILCE-7M4-Film KP400 base.icm");
     ok("each camera's ICC carries its own name", a.includes(Buffer.from("NikonZ5-Film KP400 base")) && b.includes(Buffer.from("SonyILCE-7M4-Film KP400 base")));
@@ -182,6 +193,16 @@ const ok = (label, cond, extra) => { (cond ? pass++ : fail++); console.log((cond
   await page.waitForSelector("#file-list:not([hidden])", { timeout: 10000 });
   await page.waitForTimeout(500);
   ok("both cameras restored after reload", (await page.locator("#file-list .dads-file-upload__file-name").count()) === 2);
+  ok("a typed offset survives the reload", (await page.locator("#file-list .ev-input").nth(1).inputValue()) === "1.50");
+  ok("my cameras remember the offset", /露光 \+1\.50 EV/.test((await page.locator("#mycam-list .hit-rest").allTextContents()).join("|")), (await page.locator("#mycam-list .hit-rest").allTextContents()).join("|"));
+
+  /* --- a camera not in the table falls back to the median --- */
+  await page.setInputFiles("#dir-input", T + "/Input");
+  await page.waitForSelector("#search-box:not([hidden])", { timeout: 10000 });
+  await page.fill("#camera-query", "panasonic"); await page.waitForTimeout(200);
+  await page.locator("#hits .hit").first().click(); await page.waitForTimeout(400);
+  { const last = page.locator("#file-list .ev-note").last(); ok("unknown camera uses the median and says so", /中央値/.test(await last.textContent()) && (await page.locator("#file-list .ev-input").last().inputValue()) === "1.27", await last.textContent()); }
+  await page.locator("#file-list [data-remove]").last().click(); await page.waitForTimeout(300);
 
   /* --- 解除 forgets it --- */
   await page.locator("#file-list [data-remove]").first().click();

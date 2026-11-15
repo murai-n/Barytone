@@ -20,6 +20,19 @@
   function fileName(p, j) { return camName(p) + "-Film " + j.film.id + " " + j.variant.id; }
   /* 表示用のカメラ名：先頭のメーカー名のあとに空白を入れる（NikonZ5 → Nikon Z5） */
   var BRANDS = [["PhaseOne", "Phase One"], ["OMSystem", "OM System"], ["Fujifilm", "Fujifilm"], ["FUJIFILM", "FUJIFILM"], ["Hasselblad", "Hasselblad"], ["Panasonic", "Panasonic"], ["Olympus", "Olympus"], ["Pentax", "Pentax"], ["Nikon", "Nikon"], ["Canon", "Canon"], ["Sony", "Sony"], ["Leica", "Leica"], ["Ricoh", "Ricoh"], ["Sigma", "Sigma"], ["Mamiya", "Mamiya"], ["Leaf", "Leaf"], ["Samsung", "Samsung"]];
+  /* exposure offset per camera, from Capture One's own curves (ds/camera_ev.json):
+     the lift its default curve gives a grey card, which Linear Response drops */
+  var EVT = C.CAMERA_EV || { default: 0, ev: {} }, EV_IDX = {};
+  function evNorm(s) { return String(s).toLowerCase().replace(/[^a-z0-9]+/g, ""); }
+  Object.keys(EVT.ev).forEach(function (k) { EV_IDX[evNorm(k)] = k; });
+  function evLookup(cam) {
+    var n = evNorm(cam), tries = [n, n.replace(/^sonyilce/, "sonya"), n.replace(/^sonydsc/, "sony")];
+    if (EVT.ev[cam] != null) return { ev: EVT.ev[cam], src: "table" };
+    for (var i = 0; i < tries.length; i++) if (EV_IDX[tries[i]]) return { ev: EVT.ev[EV_IDX[tries[i]]], src: "table" };
+    return { ev: EVT.default, src: "default" };
+  }
+  function evClamp(v) { v = parseFloat(String(v).replace(",", ".")); return isFinite(v) ? Math.round(Math.min(Math.max(v, -3), 3) * 100) / 100 : null; }
+  function evFmt(v) { return (v > 0 ? "+" : v < 0 ? "-" : "±") + Math.abs(v).toFixed(2); }
   function camDisplay(p) {
     var c = camName(p);
     for (var i = 0; i < BRANDS.length; i++) {
@@ -100,7 +113,8 @@
     Array.prototype.forEach.call(document.querySelectorAll(".film-dir"), function (el) { el.textContent = n ? filmDir(p) + more : "1 Film (カメラ名)"; });
     $("summary").textContent = !n ? "先に手順1でプロファイルを選んでください。"
       : (n > 1 ? n + "台のカメラ（" + state.picks.map(function (q) { return camDisplay(q); }).join("、") + "）それぞれに、" : "")
-        + JOBS.length + "種類のフィルムについて、ICCプロファイルと、それを使うスタイルを作ります。" + fileName(p, JOBS[0]) + ".icm と " + styleName(p, JOBS[0]) + ".costyle のような名前で、1つのZIP（" + zipName() + "）にまとまります。";
+        + JOBS.length + "種類のフィルムについて、ICCプロファイルと、それを使うスタイルを作ります。" + fileName(p, JOBS[0]) + ".icm と " + styleName(p, JOBS[0]) + ".costyle のような名前で、1つのZIP（" + zipName() + "）にまとまります。"
+        + (n ? " スタイルには露光の補正（" + state.picks.map(function (q) { return (n > 1 ? camDisplay(q) + " " : "") + evFmt(q.ev) + " EV"; }).join("、") + "）が入ります。" : "");
     $("run-button").disabled = !n;
     $("run-button").textContent = n > 1 ? n + "台分のICCプロファイルを作成してダウンロード" : "ICCプロファイルを作成してダウンロード";
   }
@@ -126,7 +140,9 @@
     $("file-list").innerHTML = state.picks.map(function (p, i) {
       return '<li class="dads-file-upload__file-item"><div class="dads-file-upload__file-marker"></div>' +
         '<div class="dads-file-upload__file-info"><p><span class="dads-file-upload__file-name">' + esc(p.file.name) + "</span>" +
-        '<span class="dads-file-upload__file-meta">' + esc(camDisplay(p) + "・" + fmtSize(p.file.size)) + "</span></p></div>" +
+        '<span class="dads-file-upload__file-meta">' + esc(camDisplay(p) + "・" + fmtSize(p.file.size)) + "</span></p>" +
+        '<p class="ev-row"><label>露光 <input class="ev-input" type="number" step="0.05" min="-3" max="3" inputmode="decimal" value="' + p.ev.toFixed(2) + '" data-ev="' + i + '" aria-describedby="ev-note-' + i + '"> EV</label>' +
+        '<span class="ev-note" id="ev-note-' + i + '">' + (p.evSrc === "table" ? "Capture One の標準カーブから求めた値" : p.evSrc === "saved" ? "前回使った値" : p.evSrc === "manual" ? "手で変えた値" : "表にない機種のため、全機種の中央値") + "</span></p></div>" +
         '<button class="dads-file-upload__remove-button dads-button" data-type="text" data-size="xs" type="button" data-remove="' + i + '" aria-label="' + esc(p.file.name) + ' を解除">解除</button></li>';
     }).join("");
     $("upload").setAttribute("data-multiple", state.picks.length > 1 ? "true" : "false");
@@ -143,7 +159,7 @@
     for (var i = 0; i < state.picks.length; i++) if (state.picks[i].file === file) return i;
     return -1;
   }
-  function takeFile(file, fromCache, cand) {
+  function takeFile(file, fromCache, cand, evSaved) {
     setUploadError("");
     if (!file) return;
     if (!ICC_RE.test(file.name)) { setUploadError("ICCプロファイル（.icc または .icm）を選んでください。"); return; }
@@ -153,6 +169,8 @@
       var buf = reader.result, info;
       try { info = FB.inspect(buf); } catch (err) { setUploadError(file.name + "：" + (err && err.message ? err.message : "読み込めませんでした。")); return; }
       var p = { file: file, buf: buf, info: info, cand: cand || null }, cam = camName(p), msg = file.name + " を読み込みました。";
+      if (evSaved == null) { var mine = mycams.find(function (m) { return myCamOf(m.name) === cam && m.ev != null; }); if (mine) evSaved = mine.ev; }
+      if (evSaved != null) { p.ev = evSaved; p.evSrc = "saved"; } else { var lk = evLookup(cam); p.ev = lk.ev; p.evSrc = lk.src; }
       /* one profile per camera: the names inside the ZIP are per camera, so a second pick replaces the first */
       var same = state.picks.findIndex(function (q) { return camName(q) === cam; });
       if (same >= 0) { msg = camDisplay(p) + " は " + file.name + " に入れ替えました。"; state.picks[same] = p; }
@@ -306,7 +324,7 @@
   /* my cameras: every camera a ZIP was saved for, newest profile per camera, kept until deleted here */
   var mycams = [];
   function saveMyCams() {
-    try { var recs = mycams.map(function (m) { return { name: m.name, buf: m.buf, at: m.at }; });
+    try { var recs = mycams.map(function (m) { return { name: m.name, buf: m.buf, at: m.at, ev: m.ev }; });
       idbRun("readwrite", function (st) { st.put(recs, KEY_MY); })["catch"](function () {}); } catch (e) {}
   }
   function loadMyCams() {
@@ -321,7 +339,7 @@
   function addMyCams(picks) {
     var at = new Date().toISOString().slice(0, 10);
     picks.forEach(function (p) {
-      var cam = camName(p), i = mycams.findIndex(function (m) { return myCamOf(m.name) === cam; }), rec = { name: p.file.name, buf: p.buf, at: at };
+      var cam = camName(p), i = mycams.findIndex(function (m) { return myCamOf(m.name) === cam; }), rec = { name: p.file.name, buf: p.buf, at: at, ev: p.ev };
       if (i >= 0) mycams[i] = rec; else mycams.push(rec);
     });
     mycams.sort(function (a, b) { return myCamOf(a.name).localeCompare(myCamOf(b.name), "en"); });
@@ -334,7 +352,7 @@
       var disp = camDisplay({ file: { name: m.name } });
       return '<li class="mycam-row"><button type="button" class="hit" data-my="' + i + '" aria-pressed="' + on + '">' +
         '<span class="hit-cam">' + esc(disp) + "</span>" +
-        '<span class="hit-rest">' + esc(m.name + (m.at ? "　前回 " + m.at : "")) + "</span></button>" +
+        '<span class="hit-rest">' + esc(m.name + (m.at ? "　前回 " + m.at : "") + (m.ev != null ? "　露光 " + evFmt(m.ev) + " EV" : "")) + "</span></button>" +
         '<button type="button" class="dads-button mycam-del" data-type="text" data-size="xs" data-mydel="' + i + '" aria-label="' + esc(disp) + ' をマイカメラから削除">削除</button></li>';
     }).join("");
     $("lead-folder").textContent = mycams.length ? "ほかのカメラは、Capture One が持っているカメラプロファイルのフォルダを選ぶと、カメラ名で探せます。" : "Capture One が持っているカメラプロファイルのフォルダを選ぶと、カメラ名で探せます。";
@@ -343,11 +361,11 @@
     var m = mycams[i], cam = myCamOf(m.name), k = state.picks.findIndex(function (p) { return camName(p) === cam && p.file.name === m.name; });
     if (k >= 0) { if (!only) { dropPick(k); $("upload-announcer").textContent = m.name + " を解除しました。"; } return; }
     var f; try { f = new File([m.buf], m.name, { type: "application/vnd.iccprofile" }); } catch (e) { return; }
-    takeFile(f, false, null);
+    takeFile(f, false, null, m.ev != null ? m.ev : null);
   }
   function remember() {
     try {
-      var recs = state.picks.map(function (p) { return { name: p.file.name, buf: p.buf }; });
+      var recs = state.picks.map(function (p) { return { name: p.file.name, buf: p.buf, ev: p.ev }; });
       idbRun("readwrite", function (st) { st["delete"](KEY); if (recs.length) st.put(recs, KEY_ALL); else st["delete"](KEY_ALL); })["catch"](function () {});
     } catch (e) {}
   }
@@ -362,7 +380,7 @@
           if (!rec || !rec.buf || !rec.name) return;
           var f;
           try { f = new File([rec.buf], rec.name, { type: "application/vnd.iccprofile" }); } catch (e) { return; }
-          takeFile(f, true);
+          takeFile(f, true, null, rec.ev != null ? rec.ev : null);
         });
       }, function () {});
     } catch (e) {}
@@ -447,6 +465,14 @@
     var b = e.target.closest && e.target.closest("[data-my]"); if (b) pickMyCam(+b.getAttribute("data-my"), false);
   });
   $("mycam-all").addEventListener("click", function () { mycams.forEach(function (m, i) { pickMyCam(i, true); }); });
+  $("file-list").addEventListener("change", function (e) {
+    var t = e.target; if (!t.hasAttribute || !t.hasAttribute("data-ev")) return;
+    var p = state.picks[+t.getAttribute("data-ev")], v = evClamp(t.value); if (!p) return;
+    if (v == null) { t.value = p.ev.toFixed(2); return; }
+    p.ev = v; p.evSrc = "manual"; t.value = v.toFixed(2);
+    var note = $("ev-note-" + t.getAttribute("data-ev")); if (note) note.textContent = "手で変えた値";
+    remember(); refresh();
+  });
   $("file-list").addEventListener("click", function (e) {
     var b = e.target.closest && e.target.closest("[data-remove]"); if (!b) return;
     var name = state.picks[+b.getAttribute("data-remove")].file.name;
@@ -521,7 +547,7 @@
         try {
           var bytes = FB.bake(C, p.buf.slice(0), j.film, j.variant, name);
           files.push({ name: root + "/" + iccDir(p) + "/" + name + ".icm", data: bytes });
-          var sty = FB.costyle(j.film, { icc: name + ".icm", filmCurve: filmCurveName(p), name: styleName(p, j) });
+          var sty = FB.costyle(j.film, { icc: name + ".icm", filmCurve: filmCurveName(p), name: styleName(p, j), ev: p.ev });
           files.push({ name: root + "/" + filmDir(p) + "/" + kindDir(j) + "/" + styleName(p, j) + ".costyle", data: new TextEncoder().encode(sty) });
         } catch (err) {
           $("progress").hidden = true; $("status").textContent = ""; btn.disabled = false;
