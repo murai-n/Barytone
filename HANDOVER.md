@@ -79,7 +79,7 @@ Linear Response はそのうち最も平坦な 1 本に差し替えるだけで�
 ```
 python3 bake3/make_fixture.py /tmp/co_test       # 試験用カメラプロファイル 12 個
 python3 bake3/build.py                            # /home/claude/bake/dads にデザインシステムが要る
-CO_TEST=/tmp/co_test node bake3/t_browser.js      # 52 件
+CO_TEST=/tmp/co_test node bake3/t_browser.js      # 75 件
 ```
 
 デザインシステムは `digital-go-jp/design-system-example-components-html` を
@@ -87,3 +87,6 @@ CO_TEST=/tmp/co_test node bake3/t_browser.js      # 52 件
 展開した `package/` を `/home/claude/bake/dads/pkg/package` に置く。
 
 モノクロ側の検証は `README.md`「モノクロ ICC の作り方と検証」。
+モノクロのグレー位置（速度点 +1.1 log）は `mono.METER_LOG` の1か所にあり、`export_mono.py` が
+`films.json` 経由でブラウザのエンジンに渡す。`mono.py` を変えたら `export_mono.py` →
+`node bake3/src/test_mono.js`（JS と Python の一致）→ `build.py` の順で回すこと。

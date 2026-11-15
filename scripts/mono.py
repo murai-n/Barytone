@@ -155,6 +155,8 @@ def speed_point(film):
     x, d = film_curve(film)
     return float(np.interp(d[0] + 0.10, d, x))
 
+METER_LOG = 1.1               # metered mid-grey above the speed point, log H (see neg_density)
+
 def neg_density(film, H):
     """Negative density for a relative exposure, placed at the box speed.
 
@@ -165,7 +167,7 @@ def neg_density(film, H):
     lo, hi = x[0], x[-1]
     # Meter calibration: the speed point gets 0.80/S lux.s (ISO 6) and a metered
     # mid-grey 10/S, a ratio of 12.5 -> 1.1 log. (Zone I to Zone V, 4 stops, agrees.)
-    pos = speed_point(film) + 1.1 + np.log10(np.asarray(H, float) / GRAY)
+    pos = speed_point(film) + METER_LOG + np.log10(np.asarray(H, float) / GRAY)
     return np.interp(np.clip(pos, lo, hi), x, d)
 
 # ---------------------------------------------------------------- paper

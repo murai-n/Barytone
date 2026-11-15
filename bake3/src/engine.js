@@ -217,7 +217,7 @@
     for (var i = 0; i < S.length; i++) H += S[i] * k[i];
     H = Math.max(H, 1e-7);
     var xs = film.x, lo = xs[0], hi = xs[xs.length - 1];
-    var pos = Math.min(Math.max(film.sp + 1 + Math.log10(H / C.GRAY), lo), hi);
+    var pos = Math.min(Math.max(film.sp + P.METER_LOG + Math.log10(H / C.GRAY), lo), hi);   /* metered grey above the speed point (mono.METER_LOG) */
     var u = film.ref - interp(pos, xs, film.d);
     var val = Math.min(Math.max(P.V_MID - u / P.NEG_SPAN, 0), 1), Y = Math.pow(val, P.ENC), w = C.D65W;
     return [Y * w[0], Y * w[1], Y * w[2]];
