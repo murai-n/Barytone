@@ -55,7 +55,9 @@ def main():
         d["films"] = [e for e in d["films"] if e.get("kind") != "mono"] + films
         ev_path = os.path.join(ROOT, "ds/camera_ev.json")      # per-camera exposure offsets (scripts/camera_ev.py)
         if os.path.exists(ev_path): d["CAMERA_EV"] = json.load(open(ev_path))
-        d["MONO"] = dict(ENC=mono.ENC, NEG_SPAN=mono.NEG_SPAN, V_MID=mono.V_MID, METER_LOG=mono.METER_LOG, preview=PREVIEW)
+        # the reference print (negative density -> ICC value), the full table
+        ref = dict(u=[float(x) for x in mono.REF_U], v=[float(x) for x in mono.REF_V])
+        d["MONO"] = dict(ENC=mono.ENC, METER_LOG=mono.METER_LOG, REF=ref, preview=PREVIEW)
         json.dump(d, open(t, "w"))
     # reference renderings for the JS engine test
     rng = np.random.default_rng(7)

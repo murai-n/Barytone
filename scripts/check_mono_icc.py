@@ -6,7 +6,7 @@ For each profile: output is neutral, a grey ramp only rises, mid-grey keeps
 L* 50 and the shadows/highlights stay inside the encoding. Then the profile
 is decoded, the paper style's curve (MGIV RC grade 2) applied, and the
 result compared with mono.render() for the whole chain (print-dev, in 8-bit
-levels; reported, not tested, since it is the ICC error times the paper slope)."""
+levels; must stay under 3)."""
 import sys, os, io, numpy as np, colour
 from PIL import Image, ImageCms
 import mono, spec3 as S
@@ -38,10 +38,10 @@ for f, a in mono.ALIAS.items():
         X = lin(sc.astype(float)) @ S.M_SRGB_XYZ.T
         ref = colour.XYZ_to_sRGB(mono.render(f, X, filt=fl), apply_cctf_encoding=True)[:, 1] * 255
         dev = np.abs(got - ref).max()
-        # the ICC's own error, in the curve domain; a 33-node grid cannot follow
-        # the film curve exactly, and 0.01 here is 0.024 density, finer than the traces
+        # the ICC's own error in the curve domain (reported), and what it does to the
+        # print at grade 2 (tested): a 33-node grid cannot follow the film exactly
         verr = np.abs(v - mono.icc_xyz(f, X, fl)[:, 1] ** (1 / mono.ENC)).max()
-        ok = spread <= 1 and mono_ok and abs(L - 50) < 1.0 and r[0] > 0 and r[-1] < 255 and verr < 0.01
+        ok = spread <= 1 and mono_ok and abs(L - 50) < 1.0 and r[0] > 0 and r[-1] < 255 and dev < 3.0
         bad += not ok
         rows.append((f, fl, spread, mono_ok, L, r[0], r[-1], verr, dev, np.round(got).astype(int)))
 print(f"{'film':11s} {'filter':7s} neutral ramp  L*mid  black white  icc-err  print-dev  " + " ".join(SCENE))

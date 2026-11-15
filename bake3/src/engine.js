@@ -207,11 +207,11 @@
     var fb = v.bpaper ? baseRender(C, film, film.variants[0], xyz) : xyz;
     return [w * o[0] * s + (1 - w) * fb[0], w * o[1] * s + (1 - w) * fb[1], w * o[2] * s + (1 - w) * fb[2]];
   }
-  /* Black and white: the ICC is the negative only (film + contrast filter).
-     The filter is already inside v.mk, so it acts on the spectrum before the
-     emulsion integrates it.  The negative's density relative to mid-grey is
-     written linearly into Capture One's curve domain (linear ** 1/ENC); paper
-     and grade are a curve style on top.  Output is neutral (a = b = 0). */
+  /* Black and white: the ICC is the film (+ contrast filter, already inside
+     v.mk, so it acts on the spectrum before the emulsion integrates it) shown as
+     a soft reference print: the negative's density relative to mid-grey goes
+     through the reference table (mono.REF_V), so no paper-grade curve on top is
+     steeper than about 2.  Output is neutral (a = b = 0). */
   function monoRender(C, film, v, xyz) {
     var S = spectrum(C, xyz), k = v.mk, H = 0, P = C.MONO;
     for (var i = 0; i < S.length; i++) H += S[i] * k[i];
@@ -219,7 +219,7 @@
     var xs = film.x, lo = xs[0], hi = xs[xs.length - 1];
     var pos = Math.min(Math.max(film.sp + P.METER_LOG + Math.log10(H / C.GRAY), lo), hi);   /* metered grey above the speed point (mono.METER_LOG) */
     var u = film.ref - interp(pos, xs, film.d);
-    var val = Math.min(Math.max(P.V_MID - u / P.NEG_SPAN, 0), 1), Y = Math.pow(val, P.ENC), w = C.D65W;
+    var val = interp(u, P.REF.u, P.REF.v), Y = Math.pow(val, P.ENC), w = C.D65W;   /* the reference print (mono.icc_value) */
     return [Y * w[0], Y * w[1], Y * w[2]];
   }
   function renderXYZ(C, film, v, xyz) {
