@@ -227,22 +227,34 @@
      for scene level x^1.8.  The film's own Dmax (T at x = 0) is taken as the
      darkest point: it is subtracted before the dark-surround -> dim-surround
      compression T^P, and a 0.1% viewing-flare floor F is left so the curve never
-     sits on 0.  Mid-tones and highlights match the earlier T^P rule within 0.002.
-     Proposed by a tester (feedback v01, "black Af"). */
+     sits on 0.  Mid-tones match the earlier T^P rule within 0.002 (black Af).
+     Above mid-grey +kneeEV the curve is lifted with a smoothstep so sensor
+     saturation (x = 1) reaches clear film (y = 1): clipped pixels go to white.
+     Default kneeEV = 1.5; pass kneeEV: null to keep the pre-lift curve. */
   var SLIDE_X = [0, 0.03, 0.06, 0.09, 0.12, 0.16, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1];
   function slideTone(C, film, opts) {
     opts = opts || {};
     var P = opts.power == null ? 0.80 : opts.power, F = opts.floor == null ? 0.001 : opts.floor;
+    var kneeEV = opts.kneeEV === undefined ? 1.5 : opts.kneeEV;
     var v = { k: 0, deep: false, base: false }, W = C.D65W;
     var T = SLIDE_X.map(function (x) {
       var s = Math.max(Math.pow(x, 1.8), 1e-6);
       return posRender(C, film, v, exposures(film, spectrum(C, [W[0] * s, W[1] * s, W[2] * s])))[1];
     });
     var Tb = T[0];
-    return SLIDE_X.map(function (x, i) {
+    var pts = SLIDE_X.map(function (x, i) {
       var y = F + (1 - F) * Math.pow(Math.max(0, (T[i] - Tb) / (1 - Tb)), P);
-      return x.toFixed(6) + "," + Math.pow(Math.min(1, Math.max(0, y)), 1 / 1.8).toFixed(6);
-    }).join(";");
+      return [x, Math.pow(Math.min(1, Math.max(0, y)), 1 / 1.8)];
+    });
+    if (kneeEV != null) {
+      var xk = Math.pow(0.18 * Math.pow(2, kneeEV), 1 / 1.8), y1 = pts[pts.length - 1][1];
+      pts = pts.map(function (p) {
+        if (p[0] <= xk) return p;
+        var t = (p[0] - xk) / (1 - xk), w = t * t * (3 - 2 * t);
+        return [p[0], Math.min(1, p[1] + (1 - y1) * w)];
+      });
+    }
+    return pts.map(function (p) { return p[0].toFixed(6) + "," + p[1].toFixed(6); }).join(";");
   }
   /* A look baked on top of the film data (film.sat, e.g. Portra VC): chroma
      scaled in CIELAB (D65 white), lightness and hue kept, so greys - and the

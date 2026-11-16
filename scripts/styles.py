@@ -35,12 +35,18 @@ GD=np.outer(YD,M.D65W)
 lum=M.M_SRGB_XYZ[1]
 SLIDE_GAMMA=1.2/1.5   # slides are made for a dark-surround light box (system gamma ~1.5); a dim-surround display wants ~1.2
 SLIDE_FLARE=0.001     # viewing-flare floor (linear): the darkest the slide's own Dmax is shown
-def slide_view(Y):
+SLIDE_KNEE_EV=1.5     # above mid-grey + this, lift so sensor saturation reaches clear film (engine.js slideTone)
+def slide_view(Y, x=None):
     """Film Dmax is the darkest point: subtract it, then compress (T^P), then leave a 0.1% flare floor.
-    (Was: T^P stretched so Dmax sat at L* 3, which left blacks lifted.)  The browser tool computes the
-    same curve in engine.js slideTone(); films.json "slide" comes from there."""
+    Above mid-grey + SLIDE_KNEE_EV the curve is lifted so x=1 maps to clear film. The browser tool
+    computes the same curve in engine.js slideTone(); films.json "slide" comes from there.
+    x, if given, is the curve-domain input (gamma 1.8) for each row of Y; default is the styles grid."""
     Y=np.clip(Y,1e-7,None); lo=Y.min()
-    return SLIDE_FLARE+(1-SLIDE_FLARE)*(np.clip((Y-lo)/(1-lo),0,None))**SLIDE_GAMMA
+    o=SLIDE_FLARE+(1-SLIDE_FLARE)*(np.clip((Y-lo)/(1-lo),0,None))**SLIDE_GAMMA
+    if x is None: x=XD  # encoded scene levels on the styles grid
+    x=np.asarray(x,float); xk=(0.18*2**SLIDE_KNEE_EV)**(1/ENC); y1=float(o[-1])
+    t=np.clip((x-xk)/max(1-xk,1e-9),0,1); w=t*t*(3-2*t)
+    return np.where(x<=xk, o, np.minimum(1, o+(1-y1)*w))
 FADED_FLARE=0.012   # print surface reflection for the faded paper variant (normal uses M.VIEW_FLARE)
 CURVE_KEYS=("GradationCurve","GradationCurveRed","GradationCurveGreen","GradationCurveBlue","GradationCurveY")
 IDENTITY="0.000000,0.000000;1.000000,1.000000"
