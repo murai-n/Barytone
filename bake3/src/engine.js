@@ -222,6 +222,28 @@
     var val = interp(u, P.REF.u, P.REF.v), Y = Math.pow(val, P.ENC), w = C.D65W;   /* the reference print (mono.icc_value) */
     return [Y * w[0], Y * w[1], Y * w[2]];
   }
+  /* Slide viewing tone (the "slide tone" layer of positive films), 16 points,
+     ProPhoto gamma 1.8.  T = neutral transmittance of the slide (clear film = 1)
+     for scene level x^1.8.  The film's own Dmax (T at x = 0) is taken as the
+     darkest point: it is subtracted before the dark-surround -> dim-surround
+     compression T^P, and a 0.1% viewing-flare floor F is left so the curve never
+     sits on 0.  Mid-tones and highlights match the earlier T^P rule within 0.002.
+     Proposed by a tester (feedback v01, "black Af"). */
+  var SLIDE_X = [0, 0.03, 0.06, 0.09, 0.12, 0.16, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1];
+  function slideTone(C, film, opts) {
+    opts = opts || {};
+    var P = opts.power == null ? 0.80 : opts.power, F = opts.floor == null ? 0.001 : opts.floor;
+    var v = { k: 0, deep: false, base: false }, W = C.D65W;
+    var T = SLIDE_X.map(function (x) {
+      var s = Math.max(Math.pow(x, 1.8), 1e-6);
+      return posRender(C, film, v, exposures(film, spectrum(C, [W[0] * s, W[1] * s, W[2] * s])))[1];
+    });
+    var Tb = T[0];
+    return SLIDE_X.map(function (x, i) {
+      var y = F + (1 - F) * Math.pow(Math.max(0, (T[i] - Tb) / (1 - Tb)), P);
+      return x.toFixed(6) + "," + Math.pow(Math.min(1, Math.max(0, y)), 1 / 1.8).toFixed(6);
+    }).join(";");
+  }
   /* A look baked on top of the film data (film.sat, e.g. Portra VC): chroma
      scaled in CIELAB (D65 white), lightness and hue kept, so greys - and the
      Develop and Paper curves built on them - are unchanged. */
@@ -459,5 +481,5 @@
     return out;
   }
 
-  root.FilmBaker = { inspect: inspect, bake: bake, zip: zip, costyle: costyle, exposureStyle: exposureStyle, filmLinear: filmLinear, renderXYZ: renderXYZ, BakeError: BakeError };
+  root.FilmBaker = { inspect: inspect, bake: bake, zip: zip, costyle: costyle, exposureStyle: exposureStyle, filmLinear: filmLinear, renderXYZ: renderXYZ, slideTone: slideTone, BakeError: BakeError };
 })(typeof window !== "undefined" ? window : globalThis);
