@@ -34,10 +34,13 @@ MONO_MIN=0.06   # smallest dark-end slope that keeps the curve rising once Captu
 GD=np.outer(YD,M.D65W)
 lum=M.M_SRGB_XYZ[1]
 SLIDE_GAMMA=1.2/1.5   # slides are made for a dark-surround light box (system gamma ~1.5); a dim-surround display wants ~1.2
-SLIDE_BLACK_L=3.0     # film Dmax -> this display black (L*)
+SLIDE_FLARE=0.001     # viewing-flare floor (linear): the darkest the slide's own Dmax is shown
 def slide_view(Y):
-    Y=np.clip(Y,1e-7,None)**SLIDE_GAMMA; lo,hi=Y.min(),Y.max(); yt=SLIDE_BLACK_L/903.3
-    return yt+(Y-lo)*(hi-yt)/(hi-lo)
+    """Film Dmax is the darkest point: subtract it, then compress (T^P), then leave a 0.1% flare floor.
+    (Was: T^P stretched so Dmax sat at L* 3, which left blacks lifted.)  The browser tool computes the
+    same curve in engine.js slideTone(); films.json "slide" comes from there."""
+    Y=np.clip(Y,1e-7,None); lo=Y.min()
+    return SLIDE_FLARE+(1-SLIDE_FLARE)*(np.clip((Y-lo)/(1-lo),0,None))**SLIDE_GAMMA
 FADED_FLARE=0.012   # print surface reflection for the faded paper variant (normal uses M.VIEW_FLARE)
 CURVE_KEYS=("GradationCurve","GradationCurveRed","GradationCurveGreen","GradationCurveBlue","GradationCurveY")
 IDENTITY="0.000000,0.000000;1.000000,1.000000"

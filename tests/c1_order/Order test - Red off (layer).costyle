@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<SL Engine="1300">
+	<E K="Name" V="Order test - Red off (layer)" />
+	<E K="StyleSource" V="Styles" />
+	<E K="UUID" V="C0776637-5E35-4F90-9FCB-CE88C7156A7C" />
+</SL>
+<LDS>
+		<LD>
+			<LA>
+			<E K="Clarity" V="0" />
+			<E K="DehazeAmount" V="0" />
+			<E K="Enabled" V="1" />
+			<E K="GradationCurveBlue" V="0.000000,0.000000;1.000000,1.000000" />
+			<E K="GradationCurveGreen" V="0.000000,0.000000;1.000000,1.000000" />
+			<E K="GradationCurveRed" V="0.000000,0.000000;1.000000,0.000000" />
+			<E K="Name" V="Order test - Red off (layer)" />
+			<E K="Opacity" V="100" />
+			</LA>
+			<MD>
+				<E K="Density" V="1" />
+				<E K="MaskType" V="1" />
+			</MD>
+		</LD>
+</LDS>
