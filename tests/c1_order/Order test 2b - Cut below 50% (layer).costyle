@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<SL Engine="1300">
+	<E K="Name" V="Order test 2b - Cut below 50% (layer)" />
+	<E K="StyleSource" V="Styles" />
+	<E K="UUID" V="75C93195-D6DF-474C-9457-4CDF2030060B" />
+</SL>
+<LDS>
+		<LD>
+			<LA>
+			<E K="Clarity" V="0" />
+			<E K="DehazeAmount" V="0" />
+			<E K="Enabled" V="1" />
+			<E K="GradationCurve" V="0.000000,0.000000;0.490000,0.000000;0.510000,0.510000;1.000000,1.000000" />
+			<E K="Name" V="Order test 2b - Cut" />
+			<E K="Opacity" V="100" />
+			</LA>
+			<MD>
+				<E K="Density" V="1" />
+				<E K="MaskType" V="1" />
+			</MD>
+		</LD>
+</LDS>
