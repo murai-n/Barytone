@@ -241,8 +241,7 @@ def render(film, xyz, paper="MGIV RC", grade="2", filt="none", view_flare=VIEW_F
     ref = float(np.ravel(neg_density(film, np.array([GRAY])))[0])
     logE = (ref - Dn) + _mid_offset(paper, grade)
     Dp = print_density(paper, grade, logE)
-    Y = 10.0 ** (-Dp)
-    Y = (Y + view_flare) / (1.0 + view_flare)
+    Y = deepen_Y((10.0 ** (-Dp) + view_flare) / (1.0 + view_flare))
     return tone_xyz(Y, paper, Dp)
 
 def _mid_offset(paper, grade):
@@ -263,26 +262,32 @@ def _mid_offset(paper, grade):
 # The kit splits the chain where the darkroom does: the ICC is the negative
 # (film + filter), a style is the print (paper + grade).
 #
-# What the ICC writes is a *reference print*, not the negative itself. An
-# earlier version wrote the negative's density linearly (a flat, scan-like
-# image) and left all the contrast to the paper curves; their slopes then
-# reached 10 at grade 5, and Capture One's sharpening, which acts before
-# those curves, came out as one-pixel paper-white lines along every hard edge.
-# Colour never had this: its ICC hands over a normal-contrast positive and its
-# curves stay under a slope of about 1.8.
+# What the ICC writes is a *reference print*, not the negative itself. Capture
+# One applies style curves before the ICC, so the ICC must already span paper
+# black to paper white: otherwise no paper style can deepen the blacks or lift
+# the whites past the ICC's range. The reference is therefore the print on the
+# kit's baseline paper and grade (MGIV RC / 3), not a soft envelope. Paper
+# styles are rebuilt as the difference from that print and are meant to run
+# *before* the ICC (see styles_mono.py).
 #
-# The reference print is shaped so no paper-grade curve is steep: its slope
-# along the negative's density follows the steepest slope any paper and grade
-# has there (the envelope), so every curve's slope is at most the envelope's
-# area over the reference's range, about 2.1. It is a soft print that never
-# clips (it only rolls off), with mid-grey at L* 50, so the Film style alone
-# already looks like a print and every grade can still be reached from it.
+# Blacks are pulled down by BLACK_DROP L* (full below L* 27, fading to 0 by
+# mid-grey) so the kit matches the manual's pure black; mid-grey stays at L* 50.
 ENC = 1.8                      # Capture One curve domain, as in styles.py
 FILTER_LABEL = {"none": "フィルターなし", "yellow": "黄（Y2 相当）", "orange": "橙（O2 相当）",
                 "red": "赤（R2 相当）", "green": "緑（G 相当）"}
 REF_U = np.linspace(-1.6, 1.0, 2601)          # relative negative density, + = shadow
-REF_HI = 0.98                                  # reference white (curve domain), below 1 so it never clips
-REF_FLOOR = 0.03                               # least slope, so the reference stays invertible past every paper
+ANCHOR_PAPER, ANCHOR_GRADE = "MGIV RC", "3"   # baseline print written by the ICC
+BLACK_DROP = 5.0                               # L* pulled from the shadows (0 at mid-grey)
+_DK0, _DK1 = 27.0, 50.0                        # full drop below _DK0, none at mid-grey
+
+def deepen_Y(Y):
+    """Pull print blacks down by BLACK_DROP L*, fading to 0 by mid-grey."""
+    Y = np.asarray(Y, float)
+    L0 = np.where(Y > 216 / 24389, 116.0 * np.cbrt(np.maximum(Y, 0.0)) - 16.0, Y * (24389.0 / 27.0))
+    t = np.clip((L0 - _DK0) / (_DK1 - _DK0), 0.0, 1.0)
+    w = 1.0 - t * t * (3.0 - 2.0 * t)
+    Ld = np.maximum(L0 - BLACK_DROP * w, 0.0)
+    return np.where(Ld > 8.0, ((Ld + 16.0) / 116.0) ** 3, Ld * (27.0 / 24389.0))
 
 def neg_rel(film, xyz, filt="none"):
     """Negative density relative to the density of a metered mid-grey.
@@ -294,22 +299,14 @@ def neg_rel(film, xyz, filt="none"):
 def print_from_u(u, paper="MGIV RC", grade="2", view_flare=VIEW_FLARE):
     """Relative negative density -> print XYZ for one paper and grade."""
     Dp = print_density(paper, grade, np.asarray(u, float) + _mid_offset(paper, grade))
-    Y = (10.0 ** (-Dp) + view_flare) / (1.0 + view_flare)
+    Y = deepen_Y((10.0 ** (-Dp) + view_flare) / (1.0 + view_flare))
     return tone_xyz(Y, paper, Dp)
 
 def _reference():
-    du = REF_U[1] - REF_U[0]; env = np.zeros_like(REF_U)
-    for p in PAPERS:
-        for g in PAPERS[p]["grades"]:
-            o = np.clip(print_from_u(REF_U, p, g)[:, 1], 0, 1) ** (1 / ENC)
-            env = np.maximum(env, -np.gradient(o, REF_U))
-    env = np.maximum(env, REF_FLOOR)
-    cum = np.concatenate([[0], np.cumsum((env[1:] + env[:-1]) / 2 * du)])   # rises with u
-    frac = 1 - cum / cum[-1]                                                  # 1 at the brightest, 0 at the darkest
-    v_mid = (((MID_L + 16) / 116) ** 3) ** (1 / ENC)                          # L* 50
-    f0 = float(np.interp(0.0, REF_U, frac))
-    lo = (v_mid - REF_HI * f0) / (1 - f0)                                     # anchor mid-grey, keep the white at REF_HI
-    return lo + (REF_HI - lo) * frac, cum[-1] / (REF_HI - lo)
+    """ICC value = the deepened MGIV RC grade-3 print, in the curve domain."""
+    Y = np.clip(print_from_u(REF_U, ANCHOR_PAPER, ANCHOR_GRADE)[:, 1], 0, 1)
+    v = Y ** (1 / ENC)
+    return v, float((-np.gradient(v, REF_U)).max())
 REF_V, REF_SLOPE_MAX = _reference()            # REF_V falls as u rises
 V_MID = float(np.interp(0.0, REF_U, REF_V))
 
@@ -326,8 +323,8 @@ def u_from_value(v):
     return np.interp(np.asarray(v, float), REF_V[::-1], REF_U[::-1])
 
 def print_from_value(v, paper="MGIV RC", grade="2", view_flare=VIEW_FLARE):
-    """The paper-grade style's job: ICC value -> print XYZ. Inverts icc_value,
-    so icc_xyz followed by this equals render()."""
+    """ICC value -> print XYZ for one paper and grade (design order: ICC then curve).
+    Inverts icc_value, so icc_xyz followed by this equals render() for neutrals."""
     return print_from_u(u_from_value(v), paper, grade, view_flare)
 
 # ids used in file names: maker letter + short name, like the colour films
